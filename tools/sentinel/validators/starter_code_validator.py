@@ -129,7 +129,9 @@ def _collect_repository_files(
 
     for path in sorted(starter_code_dir.rglob("*")):
         if path.is_file():
-            repository_files.append(path.relative_to(REPO_ROOT))
+            repository_files.append(
+                Path("starter_code") / path.relative_to(starter_code_dir)
+            )
 
     return repository_files
 
@@ -161,6 +163,7 @@ def _validate_orphan_files(
 
 def _validate_empty_files(
     repository_files: list[Path],
+    starter_code_dir: Path,
 ) -> list[str]:
     """
     Detect empty starter code files.
@@ -175,7 +178,7 @@ def _validate_empty_files(
     empty_files: list[str] = []
 
     for file_path in repository_files:
-        absolute_path = REPO_ROOT / file_path
+        absolute_path = starter_code_dir / file_path.relative_to("starter_code")
 
         if absolute_path.stat().st_size == 0:
             empty_files.append(str(file_path))
@@ -245,20 +248,37 @@ def run(
     dataset_path = dataset_path or DATASET_PATH
     starter_code_dir = starter_code_dir or STARTER_CODE_DIR
 
-    projects = _load_projects(dataset_path)
+    try:
+        projects = _load_projects(dataset_path)
 
-    referenced_files = _collect_referenced_files(projects)
-    repository_files = _collect_repository_files(starter_code_dir)
+        referenced_files = _collect_referenced_files(projects)
+        repository_files = _collect_repository_files(starter_code_dir)
 
-    orphan_files = _validate_orphan_files(
-        repository_files,
-        referenced_files,
-    )
-    empty_files = _validate_empty_files(repository_files)
-    hidden_files = _validate_hidden_files(repository_files)
-    unsupported_files = _validate_supported_extensions(
-        repository_files,
-    )
+        orphan_files = _validate_orphan_files(
+            repository_files,
+            referenced_files,
+        )
+        empty_files = _validate_empty_files(
+            repository_files,
+            starter_code_dir,
+        )
+        hidden_files = _validate_hidden_files(repository_files)
+        unsupported_files = _validate_supported_extensions(
+            repository_files,
+        )
+
+    except (
+        FileNotFoundError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
+        return ValidationResult(
+            name="Starter Code Integrity Validator",
+            passed=False,
+            errors=[str(exc)],
+            warnings=[],
+            details={},
+        )
 
     errors: list[str] = []
 
