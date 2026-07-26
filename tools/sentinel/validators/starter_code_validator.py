@@ -260,32 +260,57 @@ def run(
         repository_files,
     )
 
-    warnings: list[str] = []
+    errors: list[str] = []
 
     if orphan_files:
-        warnings.append(f"Found {len(orphan_files)} orphan starter code file(s).")
+        errors.append(f"Orphan Files: {len(orphan_files)} issue(s) detected.")
 
     if empty_files:
-        warnings.append(f"Found {len(empty_files)} empty starter code file(s).")
+        errors.append(f"Empty Files: {len(empty_files)} issue(s) detected.")
+
+    warnings: list[str] = []
 
     if hidden_files:
-        warnings.append(f"Found {len(hidden_files)} hidden starter code file(s).")
+        warnings.append(f"Hidden Files: {len(hidden_files)} issue(s) detected.")
 
     if unsupported_files:
-        warnings.append(f"Found {len(unsupported_files)} starter code file(s) with unsupported extensions.")
+        warnings.append(
+            f"Unsupported Extensions: {len(unsupported_files)} issue(s) detected."
+        )
 
-    passed = True
+    passed = not errors
 
     return ValidationResult(
         name="Starter Code Integrity Validator",
         passed=passed,
-        errors=[],
+        errors=errors,
         warnings=warnings,
         details={
-            "total_files": len(repository_files),
-            "orphan_files": orphan_files,
-            "empty_files": empty_files,
-            "hidden_files": hidden_files,
-            "unsupported_extensions": unsupported_files,
+            "resource": "Starter Code Files",
+            "count": len(repository_files),
+            "checks": {
+                "orphan_files": orphan_files,
+                "empty_files": empty_files,
+                "hidden_files": hidden_files,
+                "unsupported_extensions": unsupported_files,
+            },
+            "metadata": {
+                "orphan_files": {
+                    "label": "Orphan Files",
+                    "severity": "error",
+                },
+                "empty_files": {
+                    "label": "Empty Files",
+                    "severity": "error",
+                },
+                "hidden_files": {
+                    "label": "Hidden Files",
+                    "severity": "warning",
+                },
+                "unsupported_extensions": {
+                    "label": "Unsupported Extensions",
+                    "severity": "warning",
+                },
+            },
         },
     )

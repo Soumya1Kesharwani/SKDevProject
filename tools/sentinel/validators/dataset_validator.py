@@ -189,13 +189,36 @@ def run(
     )
 
     result.details = {
-        "projects": len(projects),
+        "resource": "Projects",
+        "count": len(projects),
         "checks": {
             "duplicate_ids": duplicate_ids,
             "duplicate_titles": duplicate_titles,
             "missing_fields": missing_fields,
             "empty_fields": empty_fields,
             "missing_files": missing_files,
+        },
+        "metadata": {
+            "duplicate_ids": {
+                "label": "Duplicate IDs",
+                "severity": "error",
+            },
+            "duplicate_titles": {
+                "label": "Duplicate Titles",
+                "severity": "error",
+            },
+            "missing_fields": {
+                "label": "Required Fields",
+                "severity": "error",
+            },
+            "empty_fields": {
+                "label": "Empty Fields",
+                "severity": "error",
+            },
+            "missing_files": {
+                "label": "Starter Code",
+                "severity": "warning",
+            },
         },
     }
 
