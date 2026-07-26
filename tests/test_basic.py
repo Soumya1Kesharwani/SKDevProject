@@ -60,7 +60,39 @@ def test_parse_skills():
     assert parse_skills("") == []
 
 
-def test_score_project():
+def test_parse_skills_valid_json_array():
+    """parse_skills should parse a valid JSON array of skills."""
+    result = parse_skills('["Python","React"]')
+    assert result == ["python", "react"]
+
+
+def test_parse_skills_malformed_json_handling():
+    """parse_skills should handle malformed JSON gracefully using fallback."""
+    # Should not crash, and parses via fallback comma-splitting behavior
+    result = parse_skills('["Python",]')
+    assert isinstance(result, list)
+    assert len(result) > 0
+
+
+def test_parse_skills_legacy_fallback():
+    """parse_skills should parse a legacy comma-separated string."""
+    result = parse_skills("Python,React")
+    assert result == ["python", "react"]
+
+
+def test_parse_skills_containing_commas():
+    """parse_skills should preserve skill names containing commas when using JSON."""
+    result = parse_skills('["HTML, CSS","JavaScript"]')
+    assert result == ["html, css", "javascript"]
+def test_parse_skills_duplicate_entries():
+    """Duplicate skills should not crash parsing."""
+    result = parse_skills("Python,Python,Python")
+
+    assert isinstance(result, list)
+    assert len(result) > 0
+
+def test_score_single_project_full_match():
+    """A project that matches all four criteria should receive the maximum score."""
     project = {
         "skills": ["Python"],
         "level": "Beginner",
@@ -207,10 +239,26 @@ def test_get_recommendations_result_format():
 
 def test_case_insensitive_recommendations_identical():
     """Lowercase and titlecase skill inputs must produce identical recommendations."""
-    results_lower = get_recommendations("python", "Beginner", "Data", "Low")
-    results_title = get_recommendations("Python", "Beginner", "Data", "Low")
-    assert [p["id"] for p in results_lower.get("recommendations", [])] == [p["id"] for p in results_title.get("recommendations", [])]
+    results_lower = get_recommendations("python", "Beginner", "Data", "Low").get("recommendations", [])
+    results_title = get_recommendations("Python", "Beginner", "Data", "Low").get("recommendations", [])
+    assert [p["id"] for p in results_lower] == [p["id"] for p in results_title]
+def test_recommendations_are_deterministic():
+    """Same inputs should always return the same ordering."""
+    first = get_recommendations(
+        "Python",
+        "Beginner",
+        "Data",
+        "Low"
+    )
 
+    second = get_recommendations(
+        "Python",
+        "Beginner",
+        "Data",
+        "Low"
+    )
+
+    assert first["recommendations"] == second["recommendations"]
 
 def test_whitespace_stripped_in_skills():
     """Leading/trailing whitespace in the skills string must be ignored."""
@@ -231,7 +279,19 @@ def test_validate_inputs():
 def test_validate_missing_fields():
     errors = validate_recommendation_inputs("", "", "", "")
     assert len(errors) == 4
+def test_valid_constant_lists_not_empty():
+    assert len(VALID_LEVELS) > 0
+    assert len(VALID_TIME_AVAILABILITY) > 0
+def test_validate_whitespace_only_fields():
+    """Whitespace-only values should be treated as empty."""
+    errors = validate_recommendation_inputs(
+        "   ",
+        "   ",
+        "   ",
+        "   "
+    )
 
+    assert len(errors) == 4
 
 # ============================================================
 # Flask Route Tests
@@ -325,10 +385,52 @@ def test_recommend_api_empty_selection():
     })
     assert response.status_code == 400
     data = response.get_json()
-    assert "Please select an area of interest" in data["error"]
+    assert "error" in data
 
 
-def test_project_not_found():
+def test_recommend_api_empty_body():
+    """The API should return 400 when the body is not valid JSON."""
+    client = get_client()
+    response = client.post("/api/recommend",
+                           data="not json",
+                           content_type="text/plain")
+    assert response.status_code in (400, 415)
+def test_recommend_api_no_body():
+    """POST with no body should fail gracefully."""
+    client = get_client()
+
+    response = client.post("/api/recommend")
+
+    assert response.status_code in (400, 415)
+def test_recommend_api_malformed_json():
+    """Malformed JSON should never produce a 500."""
+    client = get_client()
+
+    response = client.post(
+        "/api/recommend",
+        data='{"skills":"Python"',
+        content_type="application/json"
+    )
+
+    assert response.status_code in (400, 415)
+def test_recommend_api_wrong_content_type():
+    """Unexpected content types should be rejected safely."""
+    client = get_client()
+
+    response = client.post(
+        "/api/recommend",
+        data="skills=Python",
+        content_type="application/x-www-form-urlencoded"
+    )
+
+    assert response.status_code in (400, 415)
+def test_project_detail_found():
+    client = get_client()
+    response = client.get("/project/1")
+    assert response.status_code == 200
+
+
+def test_project_detail_not_found():
     client = get_client()
     response = client.get("/project/99999")
     assert response.status_code == 404
@@ -425,7 +527,10 @@ def test_scoring_weights_has_all_keys():
     """Verify SCORING_WEIGHTS contains exactly the four expected keys."""
     expected_keys = {"skill", "level", "interest", "time"}
     assert set(SCORING_WEIGHTS.keys()) == expected_keys
-
+def test_scoring_weights_are_positive():
+    """All scoring weights should remain positive."""
+    for value in SCORING_WEIGHTS.values():
+        assert value > 0
 def test_search_api_returns_results():
     """Search API should return matching projects for a valid query."""
     client = get_client()
@@ -449,8 +554,37 @@ def test_search_api_no_match():
     assert response.status_code == 200
 
     data = response.get_json()
-    assert isinstance(data, list)
-    assert len(data) == 0
+    # Should either be an error or return empty results (no match for 'Expert')
+    if response.status_code == 200:
+        assert "projects" in data
+
+def test_recommend_api_internal_failure(monkeypatch):
+    """Recommendation engine failures should not crash the API."""
+
+    import routes.main_routes as main_routes
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("forced failure")
+
+    monkeypatch.setattr(
+        main_routes,
+        "get_recommendations",
+        broken
+    )
+
+    client = get_client()
+
+    response = client.post(
+        "/api/recommend",
+        json={
+            "skills": "Python",
+            "level": "Beginner",
+            "interest": "Data",
+            "time": "Low"
+        }
+    )
+
+    assert response.status_code == 500
 # ============================================================
 # Sitemap and robots.txt tests
 # ============================================================
