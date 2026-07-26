@@ -156,7 +156,7 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
-python app.py
+python src/app.py
 ```
 
 ### Windows Setup
@@ -170,7 +170,7 @@ venv\Scripts\activate
 
 pip install -r requirements.txt
 
-python app.py
+python src/app.py
 ```
 
 ## Verify Everything Works
@@ -186,6 +186,24 @@ Expected output:
 ```bash
 All tests passed
 ```
+
+---
+
+### Validate the Project Dataset
+
+Run DevPath Sentinel to check the repository dataset for common integrity issues:
+
+```bash
+python -m tools.sentinel.cli
+```
+
+The current validator checks for:
+
+- duplicate project IDs
+- duplicate project titles
+- missing required fields
+- empty required fields
+- missing starter code references
 
 ---
 
@@ -438,6 +456,7 @@ Thanks to all the amazing people who contribute to DevPath.
 | [docs/project_overview.md](docs/project_overview.md) | What DevPath is and why |
 | [docs/github_issues.md](docs/github_issues.md) | All 12 issues with full descriptions |
 
+| [docs/faq.md](docs/faq.md) | Frequently asked questions |
 ---
 
 ## Code of Conduct
