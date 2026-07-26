@@ -1,13 +1,6 @@
-# Changelog
-
-All notable changes to this project are documented here.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
-
 ## [Unreleased]
 
 ### Added
-
 - "Share My Result" button on results page that copies a pre-filled URL to clipboard (#411)
 - Auto-fill form and trigger recommendations when opening a shared URL (#411)
 - Initial CHANGELOG.md setup for tracking project history
@@ -16,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added `SKILL_SYNONYMS` dictionary to `utils/recommender.py` mapping 28 common tech abbreviations
   (e.g. `js`, `reactjs`, `ts`, `node`, `py`) to their canonical lowercase names (#1116)
 - Added 5 new unit tests in `tests/test_basic.py` to verify synonym normalization end-to-end (#1116)
+- DevPath Sentinel developer tool for repository health and dataset integrity validation (#1295)
+- Dataset validator to detect duplicate project IDs, duplicate project titles, missing required fields, empty required fields, and missing starter code references
 
 ### Changed
 
@@ -27,3 +22,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Fixed missed skill matches when users enter common abbreviations (e.g. "JS" instead of "JavaScript"),
   which previously caused skill coverage score to drop to 0 and returned poor recommendations (#1116)
+- Correct skills suggestions dropdown overlapping with available skill chips and resolve white background conflict in dark theme
