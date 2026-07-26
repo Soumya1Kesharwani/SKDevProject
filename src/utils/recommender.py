@@ -396,14 +396,15 @@ def score_single_project(project, user_skills, level, interest, time_availabilit
 # ---------------------------------------------------------------------------
 # Skill graph helpers
 # ---------------------------------------------------------------------------
-@lru_cache(maxsize=1)
+
+_cached_skill_graph = None
+
 def _load_skill_graph():
     """Load skill_graph.json from data/. Returns empty dict on failure."""
-    global _cached_skill_graph, _skill_graph_loaded
-    if _skill_graph_loaded:
+    global _cached_skill_graph
+    if _cached_skill_graph is not None:
         return _cached_skill_graph
-        
-    _skill_graph_loaded = True
+
     path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
         "data", "skill_graph.json"
@@ -414,6 +415,7 @@ def _load_skill_graph():
     try:
         with open(path, "r", encoding="utf-8") as f:
             _cached_skill_graph = json.load(f)
+            return _cached_skill_graph
     except (json.JSONDecodeError, OSError):
         _cached_skill_graph = {}
     return _cached_skill_graph
