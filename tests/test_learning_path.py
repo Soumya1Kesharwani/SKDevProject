@@ -93,6 +93,11 @@ class TestCreateLearningPath:
         with pytest.raises(ValueError):
             create_learning_path("bad path!", make_token(), {})
 
+    def test_create_path_id_with_exclamation_raises(self):
+        """path_id containing '!' must be rejected by validation."""
+        with pytest.raises(ValueError):
+            create_learning_path("bad!path", make_token(), {})
+
     def test_create_empty_path_id_raises(self):
         """Empty path_id should raise ValueError."""
         with pytest.raises(ValueError):
@@ -102,6 +107,11 @@ class TestCreateLearningPath:
         """Empty token should raise ValueError."""
         with pytest.raises(ValueError):
             create_learning_path("p1", "", {})
+
+    def test_create_whitespace_token_raises(self):
+        """Whitespace-only token should raise ValueError."""
+        with pytest.raises(ValueError):
+            create_learning_path("p1", "   ", {})
 
     def test_create_non_dict_data_raises(self):
         """Passing a list as data should raise ValueError."""
@@ -172,6 +182,47 @@ class TestUpdateLearningPath:
         update_learning_path("token-stable", token, {"v": 2})
         # Original token still grants access
         assert get_learning_path("token-stable", token)["v"] == 2
+
+    def test_update_returns_isolated_storage(self):
+        """Mutating retrieved data should not mutate store after update."""
+        token = make_token()
+
+        create_learning_path(
+            "isolation-test",
+            token,
+            {"step": 1}
+        )
+
+        update_learning_path(
+            "isolation-test",
+            token,
+            {"step": 2}
+        )
+
+        data = get_learning_path(
+            "isolation-test",
+            token
+        )
+
+        data["step"] = 999
+
+        fresh = get_learning_path(
+            "isolation-test",
+            token
+        )
+
+        assert fresh["step"] == 2
+
+    def test_update_non_dict_data_raises(self):
+        """Updates must receive a dict payload."""
+        token = make_token()
+        create_learning_path("upd-invalid", token, {})
+        with pytest.raises(ValueError):
+            update_learning_path(
+                "upd-invalid",
+                token,
+                ["bad", "payload"]
+            )
 
 
 class TestPathExists:
@@ -256,6 +307,26 @@ class TestCreatePathRoute:
         )
         assert response.status_code == 400
 
+    def test_post_missing_body_returns_400(self):
+        client = get_client()
+        response = client.post(
+            "/api/learning-path/no-body",
+            headers={TOKEN_HEADER: make_token()}
+        )
+        assert response.status_code == 400
+
+    def test_post_malformed_json_returns_400(self):
+        client = get_client()
+
+        response = client.post(
+            "/api/learning-path/malformed",
+            data='{"step":1',
+            content_type="application/json",
+            headers={TOKEN_HEADER: make_token()}
+        )
+
+        assert response.status_code == 400
+
     def test_post_body_is_array_returns_400(self):
         client = get_client()
         response = client.post(
@@ -281,12 +352,18 @@ class TestCreatePathRoute:
         assert response.status_code == 409
 
     def test_post_invalid_path_id_characters_returns_400(self):
-        """path_id with spaces or special characters must be rejected."""
+        """path_id containing '!' (an illegal special character) must be rejected with 400.
+
+        The validation regex only permits letters, digits, hyphens, and
+        underscores.  An exclamation mark is explicitly illegal and is
+        consistent with the unit-level test ``test_create_invalid_path_id_raises``
+        which also uses '!'.  The character is URL-encoded (%21) so that Flask
+        routes the request to the handler rather than returning a 404 for an
+        unroutable path.
+        """
         client = get_client()
-        # Flask URL routing converts spaces, so we test via a known-bad char
-        # that reaches validation: a path_id with a dot
         response = client.post(
-            "/api/learning-path/bad.path",
+            "/api/learning-path/bad%21path",
             json={},
             headers={TOKEN_HEADER: make_token()},
         )
@@ -336,6 +413,24 @@ class TestReadPathRoute:
         self._seed("read-3", token, {})
         client = get_client()
         response = client.get("/api/learning-path/read-3")
+        assert response.status_code == 400
+
+    def test_get_whitespace_token_returns_400(self):
+        token = make_token()
+
+        self._seed(
+            "read-ws",
+            token,
+            {}
+        )
+
+        client = get_client()
+
+        response = client.get(
+            "/api/learning-path/read-ws",
+            headers={TOKEN_HEADER: "   "}
+        )
+
         assert response.status_code == 400
 
     def test_get_nonexistent_path_returns_404(self):
@@ -460,6 +555,26 @@ class TestUpdatePathRoute:
             content_type="text/plain",
             headers={TOKEN_HEADER: token},
         )
+        assert response.status_code == 400
+
+    def test_put_malformed_json_returns_400(self):
+        token = make_token()
+
+        self._seed(
+            "upd-bad-json",
+            token,
+            {}
+        )
+
+        client = get_client()
+
+        response = client.put(
+            "/api/learning-path/upd-bad-json",
+            data='{"step":1',
+            content_type="application/json",
+            headers={TOKEN_HEADER: token}
+        )
+
         assert response.status_code == 400
 
 
