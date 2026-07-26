@@ -58,7 +58,10 @@
   {% include 'partials/theme_head.html' %}
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="stylesheet" href="/static/bookmarks.css" />
+
   <link rel="stylesheet" href="/static/animations.css" />
+
+  <link rel="stylesheet" href="/static/recently-viewed.css" />
   <link
     href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap"
     rel="stylesheet" />
@@ -120,6 +123,16 @@
       margin: 0.75rem 0;
     }
 
+    .progress-meter-label {
+      display: block;
+      margin-bottom: 0.4rem;
+      color: var(--text-muted, #6b7280);
+      font-size: 0.75rem;
+      font-weight: 700;
+      line-height: 1;
+      text-align: right;
+    }
+
     .progress-meter {
       background: var(--gray-200, #e5e7eb);
       border-radius: 100px;
@@ -132,6 +145,7 @@
       height: 100%;
       border-radius: 100px;
       display: block;
+      min-width: 0;
       width: 0%;
       transition: width 0.3s ease;
     }
@@ -377,7 +391,7 @@
     <div class="nav-inner">
       <a href="/" class="nav-logo">Dev<span class="nav-logo-accent">Path</span></a>
 
-      <form id="topic-search-form" class="navbar-search" role="search">
+    <form id="topic-search-form" class="navbar-search" role="search">
         <input
           type="search"
           id="topic-search"
@@ -392,7 +406,19 @@
               d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </button>
-      </form>
+    </form>
+
+    <div class="nav-right">
+      <div class="nav-links">
+        <a href="#home" class="nav-link">Home</a>
+        <a href="#how-it-works" class="nav-link">How It Works</a>
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#the-project" class="nav-link">Find Project</a>
+        <a href="/compare" class="nav-link">Compare</a>
+        <a href="/contact" class="nav-link">Contact</a>
+        <a href="https://github.com/komalharshita/DevPath" class="nav-link" target="_blank" rel="noopener noreferrer">Github</a>
+      </div>
+    </div>
 
       <div class="nav-right">
             <nav class="nav-links" aria-label="site navigation">
@@ -432,6 +458,15 @@
       <a href="/explore" class="nav-mobile-link {% if request.path == '/explore' %}active{% endif %}" role="menuitem">Explore All</a>
       <a href="/compare" class="nav-mobile-link {% if request.path == '/compare' %}active{% endif %}" role="menuitem">Compare</a>
       <a href="/contact" class="nav-mobile-link {% if request.path == '/contact' %}active{% endif %}" role="menuitem">Contact</a>
+      {% if current_user %}
+      {% if current_user.is_admin %}
+      <a href="/admin" class="nav-mobile-link" role="menuitem" style="color: #4f46e5;">Admin</a>
+      {% endif %}
+      <a href="/profile" class="nav-mobile-link" role="menuitem">Profile</a>
+      <a href="/auth/logout" class="nav-mobile-link" role="menuitem">Logout</a>
+      {% else %}
+      <a href="/auth/login" class="nav-mobile-link" role="menuitem">Login with GitHub</a>
+      {% endif %}
       <a href="https://github.com/komalharshita/DevPath" target="_blank" rel="noopener noreferrer"
         class="nav-mobile-link" role="menuitem">GitHub</a>
       <button class="nav-mobile-link theme-toggle" id="theme-toggle-mobile"
@@ -510,7 +545,7 @@
           </div>
         </div>
 
-        <div class="hero-visual-main">
+        <div class="hero-visual-main" style="cursor: default;"></div>
           <div class="hvm-header">
             <span class="hvm-dot hvm-dot--red"></span>
             <span class="hvm-dot hvm-dot--yellow"></span>
@@ -620,8 +655,9 @@
           </div>
           <div class="stat-dashboard-value" id="progress-points">0</div>
           <div class="stat-dashboard-progress">
+            <span class="progress-meter-label" id="progress-meter-label">0%</span>
             <div class="progress-meter">
-              <span class="progress-meter-fill" id="progress-meter-fill" style="width: 0%;" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</span>
+              <span class="progress-meter-fill" id="progress-meter-fill" style="width: 0%;" role="progressbar" aria-label="Points progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></span>
             </div>
           </div>
           <div class="stat-dashboard-footer">
@@ -839,6 +875,9 @@
           <h3>Starter Code Included</h3>
           <p>Download a working template for every project. Skip the blank-page problem and start building immediately.</p>
           <a href="#the-project" class="feature-card-link">Get starter code</a>
+          <p>Download a working template for every project. Skip the blank-page problem and start building immediately.
+          </p>
+          <a href="#the-project" class="feature-card-link">Get starter code</a>
         </div>
       </div>
     </div>
@@ -886,7 +925,7 @@
                 
                 <!-- Reset button and Inline GitHub Trigger -->
                 <div style="display: flex; gap: 3px; align-items: center;">
-                   <button type="reset" id="reset-form-btn" class="btn-clear" style="padding: 4px 12px; font-size: 0.75rem;">
+                   <button type="reset" id="clear-filters-btn" class="btn-clear" style="padding: 4px 12px; font-size: 0.75rem;">
                     Reset
                   </button>
                 <div class="github-inline-trigger" id="github-trigger-wrap" style="line-height: 1.2;">
@@ -1005,7 +1044,7 @@
                   </button>
                 </label>
                 <div class="select-wrap">
-                  <select id="interest" name="interest">
+                  <select id="interest" name="interest" multiple>
                     <option value="" disabled selected>Select interest</option>
                     {% for interest in available_interests %}
                     <option value="{{ interest }}">{{ interest }}</option>
@@ -1135,6 +1174,14 @@
       </div>
 
       <div class="results-grid" id="results-grid"></div>
+
+        <button
+          id="show-more-btn"
+          class="btn-submit"
+          style="display:none;"
+          type="button">
+          Show More Projects
+        </button>
 
       <div class="saved-projects-panel" id="saved-projects-panel">
         <div class="saved-projects-header">
@@ -1326,7 +1373,35 @@
 
   {% include 'partials/scroll_top_btn.html' %}
 
-  <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+  <script src="/static/script.js"></script>
+  <script src="/static/bookmarks.js"></script>
+  <script src="/static/recently-viewed.js"></script>
+  
+  <script>
+    // Tab switching for leaderboard/achievements (adds to your existing JS)
+    document.addEventListener('DOMContentLoaded', function() {
+      const tabs = document.querySelectorAll('.la-tab');
+      tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+          const parent = this.closest('.leaderboard-achievement-card');
+          if (parent) {
+            parent.querySelectorAll('.la-tab').forEach(t => t.classList.remove('active'));
+            parent.querySelectorAll('.la-content').forEach(c => c.classList.remove('active'));
+            this.classList.add('active');
+            const tabId = this.getAttribute('data-tab');
+            if (tabId === 'leaderboard') {
+              const leaderboardContent = parent.querySelector('#leaderboard-content');
+              if (leaderboardContent) leaderboardContent.classList.add('active');
+            } else {
+              const achievementsContent = parent.querySelector('#achievements-content');
+              if (achievementsContent) achievementsContent.classList.add('active');
+            }
+          }
+        });
+      });
+    });
+  </script>
+      <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
 
   <script src="/static/animations.js"></script>
   <script src="/static/script.js"></script>

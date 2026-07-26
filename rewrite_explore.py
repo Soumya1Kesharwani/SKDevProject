@@ -5,7 +5,7 @@ with open("src/templates/explore.html", "r") as f:
 
 # Replace the hero section, stats section, etc. with a simple explore layout.
 # We will find the <main> tag or <header class="hero"> and remove everything until <footer class="footer">
-start_tag = '<header class="hero">'
+start_tag = '<section class="hero"'
 end_tag = '<!-- ============================================================\n       Footer'
 
 start_idx = content.find(start_tag)
