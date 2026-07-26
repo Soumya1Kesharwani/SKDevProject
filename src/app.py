@@ -65,6 +65,8 @@ from routes.admin_routes import admin_bp
 
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(admin_bp, url_prefix='/admin')
+# Enable CSRF protection for all state-changing requests
+csrf = CSRFProtect(app)
 
 # Register all routes defined in the main Blueprint (This handles your '/' route!)
 app.register_blueprint(main)
@@ -105,16 +107,7 @@ def add_security_headers(response):
         "form-action 'self' https://formspree.io https://api.web3forms.com; "
         "frame-ancestors 'none'"
     )
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data:; "
-        "font-src 'self'; "
-        "connect-src 'self'; "
-        "form-action 'self' https://formspree.io https://api.web3forms.com; "
-        "frame-ancestors 'none'"
-    )
+
     return response
 
 

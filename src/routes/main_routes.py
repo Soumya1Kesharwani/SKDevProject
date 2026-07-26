@@ -30,14 +30,19 @@ from utils.portfolio_analyzer import analyze_portfolio
 import os
 import base64
 import requests
+from models import db, ProjectProgress
 
 _skill_validator = SkillProgressionValidator()
 _code_review_manager = CodeReviewManager()
 
 # Interest categories that currently have no project recommendations available
 NO_PROJECT_INTERESTS = {
+    "machine learning/ai",
+    "devops",
+    "mobile",
     "artificial intelligence",
     "cloud computing",
+    "mobile app development",
 }
 
 def interest_has_no_projects(interest):
@@ -131,7 +136,7 @@ def recommend():
         return jsonify({"error": "Request body must be valid JSON."}), 400
 
     # Reject non-string values (e.g. null, lists, numbers) before calling .strip()
-    string_fields = ("skills", "level", "interest", "time", "tech_stack")
+    string_fields = ("skills", "level", "time", "tech_stack")
     for field in string_fields:
         value = payload.get(field)
         if value is not None and not isinstance(value, str):
@@ -139,9 +144,20 @@ def recommend():
 
     skills            = (payload.get("skills") or "").strip()
     level             = (payload.get("level") or "").strip()
-    interest          = (payload.get("interest") or "").strip()
     time_availability = (payload.get("time") or "").strip()
     tech_stack        = (payload.get("tech_stack") or "").strip()
+
+    interest = payload.get("interest")
+    if isinstance(interest, str):
+        interest = [interest.strip()]
+    elif isinstance(interest, list):
+        interest = [i.strip() for i in interest if isinstance(i, str)]
+    else:
+        interest = []
+
+    # Explicitly check if skills string field is empty to prevent underlying scoring engine crashes
+    if not skills:
+        return jsonify({"error": "Please enter at least one skill to get recommendations."}), 400
 
     # Validate before running the recommendation engine
     errors = validate_recommendation_inputs(skills, level, interest, time_availability)
@@ -149,13 +165,19 @@ def recommend():
         # Return only the first error to keep the UI message clean
         return jsonify({"error": errors[0]}), 400
 
-    if interest_has_no_projects(interest):
+    if interest and all(interest_has_no_projects(i) for i in interest):
         return jsonify({
             "projects": [],
-            "message": "No projects are currently available for this interest area. Please check back later."
+            "message": "No projects are currently available for your selected interest areas. Please check back later."
         }), 200
 
-    recommendations_data = get_recommendations(skills, level, interest, time_availability, tech_stack)
+    recommendations_data = get_recommendations(
+    skills,
+    level,
+    interest,
+    time_availability,
+    tech_stack,
+    max_results=None,)
     results = recommendations_data.get("recommendations", [])
 
     # Ensure all projects have IDs in the response
@@ -937,6 +959,44 @@ def update_path(path_id):
         return jsonify({"error": "Forbidden: invalid token for this path."}), 403
 
     return jsonify({"path_id": path_id, "message": "Learning path updated."}), 200
+
+@main.route("/api/project/<int:project_id>/progress", methods=["GET"])
+def get_project_progress(project_id):
+    """Return the user's roadmap progress for a specific project."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    progress = ProjectProgress.query.filter_by(user_id=user_id, project_id=project_id).first()
+    completed_steps = progress.completed_steps if progress else []
+    return jsonify({"completed_steps": completed_steps}), 200
+
+@main.route("/api/project/<int:project_id>/progress", methods=["POST"])
+def update_project_progress(project_id):
+    """Update the user's roadmap progress for a specific project."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    payload = request.get_json(silent=True)
+    if not payload or not isinstance(payload.get("completed_steps"), list):
+        return jsonify({"error": "Invalid payload. Expected 'completed_steps' array."}), 400
+
+    completed_steps = payload["completed_steps"]
+
+    progress = ProjectProgress.query.filter_by(user_id=user_id, project_id=project_id).first()
+    if progress:
+        progress.completed_steps = completed_steps
+    else:
+        progress = ProjectProgress(
+            user_id=user_id,
+            project_id=project_id,
+            completed_steps=completed_steps
+        )
+        db.session.add(progress)
+
+    db.session.commit()
+    return jsonify({"message": "Progress saved successfully"}), 200
 @main.route("/api/portfolio-analysis", methods=["POST"])
 def portfolio_analysis():
     """

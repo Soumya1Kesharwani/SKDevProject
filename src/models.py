@@ -60,3 +60,14 @@ class User(db.Model):
             "saved_skills": self.saved_skills if self.saved_skills else [],
             "bookmarked_projects": self.bookmarked_projects if self.bookmarked_projects else []
         }
+
+class ProjectProgress(db.Model):
+    __tablename__ = 'project_progress'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    completed_steps = db.Column(db.JSON, nullable=False, default=list)
+
+    user = db.relationship('User', backref=db.backref('progress', lazy=True, cascade="all, delete-orphan"))
+    project = db.relationship('Project')
