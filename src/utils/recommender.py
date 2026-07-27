@@ -744,7 +744,12 @@ def get_recommendations(
               f"This project, '{project_title}', is ideal for you since it {reasons}.",
           ]
 
-          explanation = templates[proj.get("id", 0) % len(templates)]
+          # Determine template index deterministically using the project ID
+          proj_id = proj.get("id", 0)
+          if isinstance(proj_id, str):
+              proj_id = sum(ord(c) for c in proj_id)
+          idx = (proj_id + len(parts)) % len(templates)
+          explanation = templates[idx]
 
       proj["match_explanation"] = explanation
       top_projects.append(proj)      

@@ -14,6 +14,7 @@ from utils.recommender import (
     score_single_project,
     SCORING_WEIGHTS,
     VALID_LEVELS,
+    VALID_INTERESTS,
     VALID_TIME_AVAILABILITY,
 )
 from utils.roadmap_comparer import compare_roadmaps, load_all_career_roadmaps
@@ -581,8 +582,8 @@ def test_search_api_no_match():
     assert response.status_code == 200
 
     data = response.get_json()
-    if response.status_code == 200:
-        assert data == []
+    assert isinstance(data, list)
+    assert len(data) == 0
 
 def test_recommend_api_internal_failure(monkeypatch):
     """Recommendation engine failures should not crash the API."""
