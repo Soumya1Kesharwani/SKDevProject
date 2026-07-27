@@ -557,9 +557,8 @@ def test_search_api_no_match():
     assert response.status_code == 200
 
     data = response.get_json()
-    # Should either be an error or return empty results (no match for 'Expert')
-    if response.status_code == 200:
-        assert data == []
+    assert isinstance(data, list)
+    assert len(data) == 0
 
 def test_recommend_api_internal_failure(monkeypatch):
     """Recommendation engine failures should not crash the API."""
