@@ -578,7 +578,6 @@ def test_search_api_returns_results():
     assert isinstance(data, list)
 
 def test_search_api_empty_query():
-    """Search API should return an empty list for blank queries."""
     client = get_client()
     response = client.get("/api/search?q=")
     assert response.status_code == 200
@@ -590,10 +589,9 @@ def test_search_api_no_match():
     client = get_client()
     response = client.get("/api/search?q=nonexistentqueryxyz")
     assert response.status_code == 200
-
     data = response.get_json()
-    if response.status_code == 200:
-        assert data == []
+    assert isinstance(data, list)
+    assert len(data) == 0
 
 def test_recommend_api_internal_failure(monkeypatch):
     """Recommendation engine failures should not crash the API."""
