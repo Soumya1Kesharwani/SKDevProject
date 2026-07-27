@@ -41,6 +41,35 @@ db.init_app(app)
 
 with app.app_context():
     db.create_all()
+    # Auto-seed project database if empty (required for ephemeral/Vercel serverless runs)
+    from models import Project
+    try:
+        if Project.query.count() == 0:
+            import json
+            data_file = os.path.join(root_dir, "data", "projects.json")
+            if os.path.exists(data_file):
+                with open(data_file, "r", encoding="utf-8") as f:
+                    projects_data = json.load(f)
+                for p_data in projects_data:
+                    project = Project(
+                        id=p_data.get("id"),
+                        title=p_data.get("title", ""),
+                        level=p_data.get("level", "Beginner"),
+                        interest=p_data.get("interest", ""),
+                        time=p_data.get("time", "Low"),
+                        description=p_data.get("description", ""),
+                        skills=p_data.get("skills", []),
+                        features=p_data.get("features", []),
+                        tech_stack=p_data.get("tech_stack", []),
+                        roadmap=p_data.get("roadmap", []),
+                        resources=p_data.get("resources", []),
+                        starter_code=p_data.get("starter_code")
+                    )
+                    db.session.add(project)
+                db.session.commit()
+                print("Database auto-seeded successfully!")
+    except Exception as e:
+        print(f"Warning: Failed to auto-seed database: {e}")
 
 # Initialize OAuth
 oauth = OAuth(app)

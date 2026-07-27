@@ -24,7 +24,10 @@ class Config:
     
     # Database Settings
     basedir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite:///" + os.path.join(basedir, "data", "devpath.db"))
+    if os.getenv("VERCEL") == "1" or os.getenv("VERCEL_ENV") is not None:
+        SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite:////tmp/devpath.db")
+    else:
+        SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite:///" + os.path.join(basedir, "data", "devpath.db"))
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Application metadata for OG tags
