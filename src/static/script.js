@@ -13,6 +13,10 @@
       // Storage can be unavailable in private browsing.
     }
 
+    if (document.body) {
+      document.body.classList.toggle("dark-theme", isDark);
+    }
+
     document.querySelectorAll(".theme-toggle").forEach(function (button) {
       button.setAttribute("aria-pressed", isDark ? "true" : "false");
       button.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
