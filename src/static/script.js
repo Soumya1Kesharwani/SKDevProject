@@ -238,6 +238,33 @@ function loadProgressState() {
   } catch (err) {
     console.warn("Unable to load progress state", err);
   }
+
+  fetch("/api/user-progress")
+    .then(function (r) {
+      if (!r.ok) throw new Error("Not authenticated");
+      return r.json();
+    })
+    .then(function (data) {
+      if (data.data && Object.keys(data.data).length > 0) {
+        var serverSaved = data.data;
+        if (typeof serverSaved === "object") {
+          var merged = {};
+          Object.keys(progress).forEach(function (k) {
+            if (Array.isArray(progress[k]) && Array.isArray(serverSaved[k])) {
+              merged[k] = serverSaved[k].length > progress[k].length ? serverSaved[k] : progress[k];
+            } else if (typeof progress[k] === "object" && progress[k] !== null && typeof serverSaved[k] === "object" && serverSaved[k] !== null) {
+              merged[k] = Object.assign({}, progress[k], serverSaved[k]);
+            } else {
+              merged[k] = serverSaved[k] !== undefined ? serverSaved[k] : progress[k];
+            }
+          });
+          progress = Object.assign(progress, merged);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+          updateProfileWidgets();
+        }
+      }
+    })
+    .catch(function () {});
 }
 
 function saveProgressState() {
@@ -247,6 +274,12 @@ function saveProgressState() {
   } catch (err) {
     console.warn("Unable to save progress state", err);
   }
+
+  fetch("/api/user-progress", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ data: progress }),
+  }).catch(function () {});
 }
 
 function computeProgressPoints() {
