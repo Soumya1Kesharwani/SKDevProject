@@ -1,7 +1,7 @@
 """ML-accelerated recommendation system with caching and batching."""
 
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
 
 
@@ -27,14 +27,14 @@ class MLRecommender:
 
         if use_cache and cache_key in self.cache:
             cached = self.cache[cache_key]
-            if datetime.utcnow() < cached["expires_at"]:
+            if datetime.now(timezone.utc) < cached["expires_at"]:
                 return cached["data"]
 
         recommendations = self._ml_score(skills, difficulty, interest)
 
         self.cache[cache_key] = {
             "data": recommendations,
-            "expires_at": datetime.utcnow() + timedelta(seconds=self.cache_ttl),
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=self.cache_ttl),
         }
 
         return recommendations
@@ -92,7 +92,7 @@ class MLRecommender:
         """Add new ML feature with weights."""
         self.model_state[feature_name] = {
             "weights": weights,
-            "added_at": datetime.utcnow().isoformat(),
+            "added_at": datetime.now(timezone.utc).isoformat(),
         }
 
     def get_model_metrics(self) -> Dict:
