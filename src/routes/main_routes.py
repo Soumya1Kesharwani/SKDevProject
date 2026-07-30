@@ -62,7 +62,6 @@ def index():
         # In development, we prefer rendering a fallback homepage rather than
         # aborting entirely. Log the error and use safe defaults so UI/layout
         # checks can proceed.
-        print("Warning: failed to load project stats:", e)
         stats = {"total_projects": 0, "unique_skills": 0, "beginner_friendly": 0}
         available_levels = ["Beginner", "Intermediate", "Advanced"]
         available_interests = []
@@ -980,8 +979,6 @@ def portfolio_analysis():
 
     if payload is None:
         return jsonify({"error": "Invalid JSON payload"}), 400
-
-    print(payload)
 
     completed_ids = payload.get("completed_projects", [])
 
