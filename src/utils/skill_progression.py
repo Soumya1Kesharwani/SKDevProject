@@ -5,7 +5,7 @@ Implements skill difficulty tiers, prerequisites validation, and progression
 recommendations to ensure users develop foundational knowledge before advancing.
 """
 
-from typing import Dict, List, Set, Optional, Tuple
+from typing import Dict, Optional, Tuple
 from enum import Enum
 from datetime import datetime
 
