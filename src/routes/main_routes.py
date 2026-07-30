@@ -29,6 +29,7 @@ from utils.portfolio_analyzer import analyze_portfolio
 import os
 import base64
 import requests
+import math
 from models import db, ProjectProgress, UserGameProgress
 
 _skill_validator = SkillProgressionValidator()
