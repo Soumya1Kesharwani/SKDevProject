@@ -708,7 +708,7 @@ def get_recommendations(
             })
     # Sort projects in descending order so the
     # most relevant recommendations appear first.
-    scored_projects.sort(key=lambda item: (item["score"], item["project"].get("id", 0)), reverse=True)
+    scored_projects.sort(key=lambda item: (item["score"], -item["project"].get("id", 0)), reverse=True)
     
     selected_projects = (
       scored_projects
