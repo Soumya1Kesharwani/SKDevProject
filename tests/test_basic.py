@@ -14,6 +14,7 @@ from utils.recommender import (
     score_single_project,
     SCORING_WEIGHTS,
     VALID_LEVELS,
+    VALID_INTERESTS,
     VALID_TIME_AVAILABILITY,
     SKILL_SYNONYMS,
     WEIGHT_LEVEL,
@@ -372,6 +373,31 @@ def test_home_route():
     assert response.status_code == 200
 
 
+def test_explore_route():
+    """Explore route should return 200 OK and handle pagination."""
+    client = get_client()
+    response = client.get("/explore?page=1&per_page=5")
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    assert "Explore All Projects" in html
+    # The max per_page is 5, so there should be pagination controls or fewer items.
+    assert 'class="project-card"' in html
+
+def test_contact_page_renders_send_message_form():
+    """Contact page should include the external form handler and required fields."""
+    client = get_client()
+    response = client.get("/contact")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert 'class="contact-form"' in html
+    assert 'action="https://api.web3forms.com/submit"' in html
+    assert 'method="POST"' in html
+    assert 'name="name"' in html
+    assert 'name="email"' in html
+    assert 'name="message"' in html
+    assert "Send Message" in html
 def test_security_headers_present():
     """Security headers should be included in all responses."""
     client = get_client()

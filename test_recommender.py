@@ -15,6 +15,12 @@ from utils.recommender import (
     _get_related,
     _load_clusters,
 )
+try:
+    from app import app
+    ctx = app.app_context()
+    ctx.push()
+except ImportError:
+    pass
 
 # ---------------------------------------------------------------------------
 # Helpers
