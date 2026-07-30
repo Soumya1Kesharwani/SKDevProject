@@ -25,7 +25,6 @@ from utils.skill_progression import (
 )
 from utils.code_review import CodeReviewManager
 from config import Config
-from flask import jsonify
 from utils.portfolio_analyzer import analyze_portfolio
 import os
 import math
