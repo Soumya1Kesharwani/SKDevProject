@@ -138,7 +138,6 @@ def get_nlp_model():
             from sentence_transformers import SentenceTransformer
             _nlp_model = SentenceTransformer('all-MiniLM-L6-v2')
         except Exception as e:
-            print(f"Error loading NLP model: {e}")
             pass
     return _nlp_model
 
