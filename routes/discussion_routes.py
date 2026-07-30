@@ -5,7 +5,6 @@ where learners can ask questions and share knowledge about paths.
 """
 
 from flask import Blueprint, jsonify, request
-from datetime import datetime
 
 discussion_bp = Blueprint('discussions', __name__, url_prefix='/discussions')
 
