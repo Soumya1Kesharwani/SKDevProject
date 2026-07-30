@@ -30,7 +30,7 @@ def test_equal_score_tiebreaker_uses_id():
     result = get_recommendations("python", "Beginner", "web", "low")
     recs = result["recommendations"]
     for i in range(len(recs) - 1):
-        assert recs[i]["id"] <= recs[i + 1]["id"] or True, (
+        assert recs[i]["id"] <= recs[i + 1]["id"], (
             "Tie-breaker not applied — equal-scored projects not ordered by id"
         )
 
