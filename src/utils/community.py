@@ -1,5 +1,6 @@
 """Community and peer support system."""
 
+import uuid
 from typing import Dict, List, Optional
 from datetime import datetime
 
@@ -39,7 +40,7 @@ class CommunityManager:
             raise ValueError(f"Discussion {discussion_id} not found")
 
         reply = {
-            "reply_id": f"reply_{len(self.discussions[discussion_id]['replies'])}",
+            "reply_id": f"reply_{uuid.uuid4().hex[:8]}",
             "user_id": user_id,
             "content": reply_content,
             "created_at": datetime.utcnow().isoformat(),
@@ -83,7 +84,7 @@ class CommunityManager:
             raise ValueError(f"Question {question_id} not found")
 
         answer = {
-            "answer_id": f"answer_{len(self.questions[question_id]['answers'])}",
+            "answer_id": f"answer_{uuid.uuid4().hex[:8]}",
             "user_id": user_id,
             "content": answer_content,
             "created_at": datetime.utcnow().isoformat(),

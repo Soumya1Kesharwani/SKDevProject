@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, session
+from flask import Blueprint, render_template, request, redirect, url_for, abort, session
 from models import db, Project, User
 
 admin_bp = Blueprint('admin', __name__)
