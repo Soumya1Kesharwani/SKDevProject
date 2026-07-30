@@ -1,7 +1,7 @@
 """Adaptive learning paths and personalization system."""
 
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class AdaptiveLearningManager:
@@ -22,8 +22,8 @@ class AdaptiveLearningManager:
             "learning_style": learning_style,
             "preferred_difficulty": "Beginner",
             "learning_pace": "Medium",
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         self.user_profiles[user_id] = profile
         return profile
@@ -38,7 +38,7 @@ class AdaptiveLearningManager:
             "skill": skill,
             "level": "Beginner",
             "confidence": 0.0,
-            "assessed_at": datetime.utcnow().isoformat(),
+            "assessed_at": datetime.now(timezone.utc).isoformat(),
         }
         return assessment
 
@@ -80,7 +80,7 @@ class AdaptiveLearningManager:
             "item_id": item_id,
             "score": score,
             "time_spent_minutes": time_spent,
-            "recorded_at": datetime.utcnow().isoformat(),
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
         }
         self.performance_history[user_id].append(record)
 
@@ -109,7 +109,7 @@ class AdaptiveLearningManager:
             profile["preferred_difficulty"] = "Beginner"
             profile["learning_pace"] = "Slow"
 
-        profile["updated_at"] = datetime.utcnow().isoformat()
+        profile["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     def get_next_recommendation(self, user_id: str) -> Optional[Dict]:
         """Get next recommended item in adaptive path."""
