@@ -16,6 +16,10 @@ from utils.recommender import (
     VALID_LEVELS,
     VALID_INTERESTS,
     VALID_TIME_AVAILABILITY,
+    SKILL_SYNONYMS,
+    WEIGHT_LEVEL,
+    WEIGHT_INTEREST,
+    WEIGHT_TIME,
 )
 from utils.roadmap_comparer import compare_roadmaps, load_all_career_roadmaps
 
@@ -331,6 +335,63 @@ def test_validate_whitespace_only_fields():
         "   "
     )
 
+def test_skill_synonym_matching():
+    """parse_skills must normalize common abbreviations to their canonical names.
+
+    Verifies that:
+    - "JS"     -> "javascript"
+    - "ReactJS" -> "react"
+    - "  ts  "  -> "typescript"  (extra whitespace stripped)
+    - trailing comma produces no empty entry
+    """
+    result = parse_skills("JS, ReactJS,  ts , ")
+    assert result == ["javascript", "react", "typescript"], (
+        f"Expected ['javascript', 'react', 'typescript'] but got {result}"
+    )
+
+
+def test_skill_synonym_matching_node():
+    """'node' and 'nodejs' must both resolve to 'node.js'."""
+    assert parse_skills("node")   == ["node.js"]
+    assert parse_skills("nodejs") == ["node.js"]
+
+
+def test_skill_synonym_matching_unknown_passthrough():
+    """Skills not present in SKILL_SYNONYMS must pass through unchanged."""
+    result = parse_skills("flutter, solidity")
+    assert result == ["flutter", "solidity"], (
+        f"Unknown skills should not be altered; got {result}"
+    )
+
+
+def test_skill_synonym_end_to_end_scoring():
+    """A user who inputs 'JS' must score the same as one who inputs 'javascript'.
+
+    This is the critical integration check: synonym normalisation in parse_skills
+    must translate all the way through score_single_project.
+    """
+    project = {
+        "skills": ["JavaScript"],
+        "level": "Beginner",
+        "interest": "Web",
+        "time": "Low",
+    }
+    score_abbrev   = score_single_project(project, parse_skills("JS"),         "Beginner", "Web", "Low")
+    score_canonical = score_single_project(project, parse_skills("JavaScript"), "Beginner", "Web", "Low")
+
+    assert score_abbrev > 0, "'JS' should score > 0 for a JavaScript project after synonym resolution"
+    assert score_abbrev == score_canonical, (
+        f"'JS' ({score_abbrev}) and 'javascript' ({score_canonical}) should produce identical scores"
+    )
+
+
+def test_skill_synonyms_dict_has_minimum_entries():
+    """SKILL_SYNONYMS must contain at least 10 entries to satisfy the issue requirement."""
+    assert len(SKILL_SYNONYMS) >= 10, (
+        f"Expected at least 10 synonym entries, found {len(SKILL_SYNONYMS)}"
+    )
+
+
     assert len(errors) == 4
 
 # ============================================================
@@ -349,6 +410,31 @@ def test_home_route():
     assert response.status_code == 200
 
 
+def test_explore_route():
+    """Explore route should return 200 OK and handle pagination."""
+    client = get_client()
+    response = client.get("/explore?page=1&per_page=5")
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    assert "Explore All Projects" in html
+    # The max per_page is 5, so there should be pagination controls or fewer items.
+    assert 'class="project-card"' in html
+
+def test_contact_page_renders_send_message_form():
+    """Contact page should include the external form handler and required fields."""
+    client = get_client()
+    response = client.get("/contact")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert 'class="contact-form"' in html
+    assert 'action="https://api.web3forms.com/submit"' in html
+    assert 'method="POST"' in html
+    assert 'name="name"' in html
+    assert 'name="email"' in html
+    assert 'name="message"' in html
+    assert "Send Message" in html
 def test_security_headers_present():
     """Security headers should be included in all responses."""
     client = get_client()

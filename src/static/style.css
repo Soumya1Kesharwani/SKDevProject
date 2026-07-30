@@ -1679,6 +1679,7 @@ html[data-theme="dark"] .theme-toggle-label::before {
   padding: 44px 44px 40px;
   box-shadow: var(--shadow-lg);
   text-align: left;
+  overflow: visible;
 }
 
 /* Form groups */
@@ -1721,6 +1722,7 @@ label {
   gap: 6px;
   cursor: text;
   transition: border-color var(--t), box-shadow var(--t), background var(--t);
+  overflow: visible;
 }
 
 .skill-input-wrap:focus-within {
@@ -1755,12 +1757,13 @@ label {
   border: none;
   cursor: pointer;
   color: var(--indigo-500);
-  font-size: 1rem;
+  font-size: 0.7rem;
   line-height: 1;
   padding: 0;
   display: flex;
   align-items: center;
   transition: color var(--t);
+  font-weight:500;
 }
 
 .skill-chip-remove:hover {
@@ -1870,6 +1873,7 @@ label {
   border-left-color: var(--indigo-400);
 }
 
+
 /*suggestions dropdown*/
 /* Suggestions dropdown container */
 .skills-suggestions {
@@ -1884,7 +1888,7 @@ label {
   margin-top: -1px;
   max-height: 240px;
   overflow-y: auto;
-  z-index: 1000;
+  z-index: 99999;
   display: none;
   box-shadow: 0 8px 20px rgba(79, 110, 247, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
 }
