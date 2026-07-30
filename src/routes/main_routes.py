@@ -27,8 +27,7 @@ from utils.code_review import CodeReviewManager
 from config import Config
 from utils.portfolio_analyzer import analyze_portfolio
 import os
-import math
-from models import db, ProjectProgress
+from models import db, ProjectProgress, UserGameProgress
 
 _skill_validator = SkillProgressionValidator()
 _code_review_manager = CodeReviewManager()
@@ -967,6 +966,35 @@ def update_project_progress(project_id):
 
     db.session.commit()
     return jsonify({"message": "Progress saved successfully"}), 200
+@main.route("/api/user-progress", methods=["GET"])
+def get_user_game_progress():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    progress = UserGameProgress.query.filter_by(user_id=user_id).first()
+    return jsonify({"data": progress.data if progress else {}}), 200
+
+@main.route("/api/user-progress", methods=["POST"])
+def save_user_game_progress():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    payload = request.get_json(silent=True)
+    if not payload or "data" not in payload:
+        return jsonify({"error": "Invalid payload. Expected 'data'."}), 400
+
+    progress = UserGameProgress.query.filter_by(user_id=user_id).first()
+    if progress:
+        progress.data = payload["data"]
+    else:
+        progress = UserGameProgress(user_id=user_id, data=payload["data"])
+        db.session.add(progress)
+
+    db.session.commit()
+    return jsonify({"message": "Progress saved successfully"}), 200
+
 @main.route("/api/portfolio-analysis", methods=["POST"])
 def portfolio_analysis():
     """
