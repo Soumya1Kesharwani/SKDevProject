@@ -71,3 +71,12 @@ class ProjectProgress(db.Model):
 
     user = db.relationship('User', backref=db.backref('progress', lazy=True, cascade="all, delete-orphan"))
     project = db.relationship('Project')
+
+class UserGameProgress(db.Model):
+    __tablename__ = 'user_game_progress'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
+    data = db.Column(db.JSON, nullable=False, default=dict)
+
+    user = db.relationship('User', backref=db.backref('game_progress', uselist=False, cascade="all, delete-orphan"))

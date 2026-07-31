@@ -8,6 +8,7 @@ import functools
 
 import json
 import os
+from functools import lru_cache
 
 from utils.data_loader import load_all_projects
 
@@ -33,7 +34,7 @@ def clear_caches():
     _skill_graph_loaded = False
 
 VALID_LEVELS = {"beginner", "intermediate", "advanced"}
-VALID_INTERESTS = {"web", "data", "education", "automation", "games", "cybersecurity", "devops", "backend", "tools", "productivity", "business logic", "mobile", "machine learning/ai"}
+VALID_INTERESTS = {"web", "data", "education", "automation", "games", "cybersecurity", "devops", "backend", "tools", "productivity", "business logic", "mobile", "machine learning/ai", "artificial intelligence", "cloud computing"}
 VALID_TIME_AVAILABILITY = {"low", "medium", "high"}
 SCORING_WEIGHTS = {
     "skill": 3,
@@ -57,6 +58,53 @@ WEIGHT_LEVEL = SCORING_WEIGHTS["level"]
 WEIGHT_INTEREST = SCORING_WEIGHTS["interest"]
 WEIGHT_TIME = SCORING_WEIGHTS["time"]
 
+VALID_INTERESTS = {
+    "web", "data", "education", "automation", "games",
+    "cybersecurity", "devops", "mobile", "machine learning/ai",
+    "artificial intelligence", "cloud computing", "mobile app development",
+    "backend", "tools", "productivity", "business logic"
+}
+VALID_TIMES = {"low", "medium", "high"}
+
+# Canonical synonym map — maps common abbreviations / alternate names to the
+# lowercase canonical skill name used throughout projects.json.
+# Add new entries here; no other code changes are needed.
+SKILL_SYNONYMS = {
+    # JavaScript ecosystem
+    "js":            "javascript",
+    "javascript":    "javascript",
+    "reactjs":       "react",
+    "react.js":      "react",
+    "vuejs":         "vue",
+    "vue.js":        "vue",
+    "nodejs":        "node.js",
+    "node":          "node.js",
+    "nextjs":        "next.js",
+    "next":          "next.js",
+    "expressjs":     "express",
+    "ts":            "typescript",
+    # Python ecosystem
+    "py":            "python",
+    "django":        "django",
+    "flask":         "flask",
+    # Markup / styling
+    "html5":         "html",
+    "css3":          "css",
+    # Systems / low-level
+    "c++":           "cpp",
+    "cplusplus":     "cpp",
+    "c plus plus":   "cpp",
+    "golang":        "go",
+    # Databases
+    "postgres":      "postgresql",
+    "psql":          "postgresql",
+    "mongo":         "mongodb",
+    # Misc
+    "web dev":       "javascript",
+    "ml":            "machine learning",
+    "ai":            "artificial intelligence",
+    "k8s":           "kubernetes",
+    "tf":            "tensorflow",
 
 # Common aliases and abbreviations for skills
 # This improves recommendation accuracy by normalizing user input
@@ -72,6 +120,30 @@ def _normalize_skill(s: str) -> str:
     """Normalize a skill string: strip surrounding whitespace and lowercase."""
     return s.strip().lower()
 
+# Keep the old name alive so score_single_project() and any external callers
+# that reference SKILL_ALIASES continue to work without modification.
+SKILL_ALIASES = SKILL_SYNONYMS
+
+def parse_skills(skills_string):
+    """
+    Convert a raw skills string into a normalized, synonym-resolved lowercase list.
+
+    Accepts either:
+    - A JSON array  e.g. '["Python", "ReactJS"]'  -> ["python", "react"]
+    - A comma-separated string  e.g. "JS, TS, Node, "  -> ["javascript", "typescript", "node.js"]
+
+    Processing steps applied to every token:
+    1. Strip surrounding whitespace.
+    2. Convert to lowercase.
+    3. Discard empty strings (handles trailing commas / double commas).
+    4. Map through SKILL_SYNONYMS so abbreviations become canonical names.
+    """
+    if not skills_string or not skills_string.strip():
+        return []
+
+    stripped = skills_string.strip()
+
+    # --- JSON array branch ---
 
 def parse_skill_entries(skills_string):
     """Parse skills with optional per-skill proficiency levels."""
@@ -81,6 +153,18 @@ def parse_skill_entries(skills_string):
         try:
             parsed = json.loads(stripped)
             if isinstance(parsed, list):
+                tokens = [str(s).strip().lower() for s in parsed if str(s).strip()]
+                return [SKILL_SYNONYMS.get(token, token) for token in tokens]
+        except (json.JSONDecodeError, ValueError):
+            pass  # fall through to comma-splitting
+
+    # --- Comma-separated branch ---
+    tokens = [
+        s.strip().lower()
+        for s in skills_string.split(",")
+        if s.strip()  # skip blanks produced by trailing / consecutive commas
+    ]
+    return [SKILL_SYNONYMS.get(token, token) for token in tokens]
                 entries = []
                 for item in parsed:
                     if isinstance(item, dict):
@@ -137,7 +221,6 @@ def get_nlp_model():
             from sentence_transformers import SentenceTransformer
             _nlp_model = SentenceTransformer('all-MiniLM-L6-v2')
         except Exception as e:
-            print(f"Error loading NLP model: {e}")
             pass
     return _nlp_model
 
@@ -155,7 +238,11 @@ def _project_text(project):
     return " ".join(parts)
 
 def _user_text(user_skills, level, interest, time_availability):
-    return f"I am a {level} developer interested in {interest}. I have {time_availability} time. My skills are: {', '.join(user_skills)}."
+    if isinstance(interest, list):
+        interest_str = ", ".join(interest)
+    else:
+        interest_str = interest
+    return f"I am a {level} developer interested in {interest_str}. I have {time_availability} time. My skills are: {', '.join(user_skills)}."
 
 @functools.lru_cache(maxsize=128)
 def _get_user_embedding(user_text):
@@ -305,6 +392,8 @@ class ScoringResult(tuple):
         return other / self.score
 
 def score_single_project(project, user_skills, level, interest, time_availability, graph=None, skill_proficiencies=None):
+    if isinstance(interest, str):
+        interest = [interest]
     TIME_RANKS = ["low", "medium", "high"]
 
     user_time    = time_availability.strip().lower()
@@ -354,8 +443,15 @@ def score_single_project(project, user_skills, level, interest, time_availabilit
 
     interest_match = False
     p_interest = project.get("interest", "").lower()
-    u_interest = interest.lower()
-    if p_interest == u_interest or (u_interest and u_interest in p_interest) or (p_interest and p_interest in u_interest):
+    # Check if ANY of the user's multiple interests match the project interest
+    matched_interest = False
+    for u_interest in interest:
+        u_interest = u_interest.lower()
+        if p_interest == u_interest or (u_interest and u_interest in p_interest) or (p_interest and p_interest in u_interest):
+            matched_interest = True
+            break
+            
+    if matched_interest:
         score += weight_interest
         interest_match = True
 
@@ -383,13 +479,14 @@ def score_single_project(project, user_skills, level, interest, time_availabilit
 # Skill graph helpers
 # ---------------------------------------------------------------------------
 
+_cached_skill_graph = None
+
 def _load_skill_graph():
     """Load skill_graph.json from data/. Returns empty dict on failure."""
-    global _cached_skill_graph, _skill_graph_loaded
-    if _skill_graph_loaded:
+    global _cached_skill_graph
+    if _cached_skill_graph is not None:
         return _cached_skill_graph
-        
-    _skill_graph_loaded = True
+
     path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
         "data", "skill_graph.json"
@@ -400,6 +497,7 @@ def _load_skill_graph():
     try:
         with open(path, "r", encoding="utf-8") as f:
             _cached_skill_graph = json.load(f)
+            return _cached_skill_graph
     except (json.JSONDecodeError, OSError):
         _cached_skill_graph = {}
     return _cached_skill_graph
@@ -570,7 +668,6 @@ def project_matches_tech(project, tech_stack):
 
     return False
 
-
 def get_recommendations(
     skills_string,
     level,
@@ -579,6 +676,8 @@ def get_recommendations(
     tech_stack="all",
     max_results=None,
 ):
+    if isinstance(interest, str):
+        interest = [interest]
     skill_entries = parse_skill_entries(skills_string)
 
     user_skills = [entry["skill"] for entry in skill_entries]
@@ -727,7 +826,12 @@ def get_recommendations(
               f"This project, '{project_title}', is ideal for you since it {reasons}.",
           ]
 
-          explanation = random.choice(templates)
+          # Determine template index deterministically using the project ID
+          proj_id = proj.get("id", 0)
+          if isinstance(proj_id, str):
+              proj_id = sum(ord(c) for c in proj_id)
+          idx = (proj_id + len(parts)) % len(templates)
+          explanation = templates[idx]
 
       proj["match_explanation"] = explanation
       top_projects.append(proj)      
@@ -759,12 +863,14 @@ def validate_recommendation_inputs(skills, level, interest, time_availability):
     elif level.strip().lower() not in VALID_LEVELS:
         errors.append("Invalid experience level. Choose Beginner, Intermediate, or Advanced.")
 
-    if (
-        not interest
-        or not isinstance(interest, str)
-        or interest.strip().lower() not in VALID_INTERESTS
-    ):
-        errors.append("Please select a valid area of interest.")
+    if isinstance(interest, str):
+        interest = [interest]
+    if not interest or not isinstance(interest, list) or len([i for i in interest if str(i).strip()]) == 0:
+        errors.append("Please select an area of interest.")
+    else:
+        invalid_interests = [i for i in interest if str(i).strip().lower() not in VALID_INTERESTS]
+        if invalid_interests:
+            errors.append("Please select a valid area of interest.")
 
     if not time_availability or not time_availability.strip():
         errors.append("Please select your time availability.")

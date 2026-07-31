@@ -1,4 +1,4 @@
-from flask import Blueprint, session, redirect, url_for, current_app
+from flask import Blueprint, session, redirect, url_for
 from models import db, User
 
 # We import github from app, but since it's instantiated there, it might cause circular import.
