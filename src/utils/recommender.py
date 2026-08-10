@@ -162,10 +162,8 @@ def parse_skill_entries(skills_string):
         if skill.strip()
     ]
 
+
 def parse_skills(skills_string):
-    """
-    Convert a raw skills string into a normalized, synonym-resolved lowercase list.
-    """
     return [entry["skill"] for entry in parse_skill_entries(skills_string)]
 
 _nlp_model = None
