@@ -8,7 +8,6 @@ for learner project submissions.
 from typing import Dict, List, Optional
 from enum import Enum
 from datetime import datetime
-import json
 
 
 class ReviewStatus(Enum):

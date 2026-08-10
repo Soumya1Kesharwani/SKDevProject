@@ -5,7 +5,6 @@ learning paths, and verifying certificate authenticity.
 """
 
 from flask import Blueprint, jsonify, render_template_string, request
-from datetime import datetime
 import json
 
 certificate_bp = Blueprint('certificates', __name__, url_prefix='/certificates')
