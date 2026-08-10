@@ -1,4 +1,4 @@
-from flask import Blueprint, session, redirect, url_for, current_app
+from flask import Blueprint, session, redirect, url_for
 from models import db, User
 
 # We import github from app, but since it's instantiated there, it might cause circular import.
@@ -22,6 +22,8 @@ def authorize():
     token = github.authorize_access_token()
     if not token:
         return redirect(url_for('main.index'))
+        
+    session['github_token'] = token
     
     resp = github.get('user', token=token)
     profile = resp.json()

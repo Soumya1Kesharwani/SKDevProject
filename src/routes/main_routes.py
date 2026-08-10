@@ -3,12 +3,12 @@
 # Each route is kept thin: it validates input, calls a utility function,
 # and returns a response. No business logic lives here.
 
-from flask import Blueprint, render_template, request, jsonify, send_from_directory, abort, make_response, redirect, url_for, session
+from flask import Blueprint, render_template, request, jsonify, send_from_directory, abort, make_response, redirect, url_for, session, flash
 
-from utils.recommender import get_recommendations, validate_recommendation_inputs
+from utils.recommender import get_recommendations, validate_recommendation_inputs, diagnose_empty_state
 from utils.data_loader import find_project_by_id, load_all_projects, get_available_levels, get_project_stats, get_available_interests
 from utils.roadmap_comparer import load_all_career_roadmaps, compare_roadmaps
-from utils.file_server import read_starter_code, resolve_starter_file, get_starter_code_dir
+from utils.file_server import read_starter_code, resolve_starter_file
 from utils.rate_limiter import rate_limit
 from utils.learning_path import (
     create_learning_path,
@@ -25,10 +25,13 @@ from utils.skill_progression import (
 )
 from utils.code_review import CodeReviewManager
 from config import Config
-from flask import jsonify
 from utils.portfolio_analyzer import analyze_portfolio
+import math
 import os
-from models import db, ProjectProgress
+import base64
+import requests
+import math
+from models import db, ProjectProgress, UserGameProgress
 
 _skill_validator = SkillProgressionValidator()
 _code_review_manager = CodeReviewManager()
@@ -61,12 +64,91 @@ def index():
         # In development, we prefer rendering a fallback homepage rather than
         # aborting entirely. Log the error and use safe defaults so UI/layout
         # checks can proceed.
-        print("Warning: failed to load project stats:", e)
         stats = {"total_projects": 0, "unique_skills": 0, "beginner_friendly": 0}
         available_levels = ["Beginner", "Intermediate", "Advanced"]
         available_interests = []
 
     return render_template("index.html", stats=stats, available_levels=available_levels, available_interests=available_interests, config=Config)
+
+@main.route("/explore")
+def explore():
+    """Render the explore page with server-side pagination, filtering, and sorting."""
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 12, type=int)
+    search_query = request.args.get("search", "").strip().lower()
+    level_filter = request.args.get("level", "").strip().lower()
+    interest_filter = request.args.get("interest", "").strip().lower()
+    time_filter = request.args.get("time", "").strip().lower()
+    sort_by = request.args.get("sort", "id_asc")
+
+    all_projects = load_all_projects()
+    filtered_projects = []
+
+    for p in all_projects:
+        # Search text
+        if search_query:
+            searchable_text = (
+                p.get("title", "") + " " + 
+                p.get("description", "") + " " + 
+                " ".join(p.get("skills", []))
+            ).lower()
+            if search_query not in searchable_text:
+                continue
+                
+        if level_filter and p.get("level", "").lower() != level_filter:
+            continue
+            
+        if interest_filter and p.get("interest", "").lower() != interest_filter:
+            continue
+            
+        if time_filter and p.get("time", "").lower() != time_filter:
+            continue
+            
+        filtered_projects.append(p)
+
+    # Sorting
+    if sort_by == "title_asc":
+        filtered_projects.sort(key=lambda x: x.get("title", "").lower())
+    elif sort_by == "title_desc":
+        filtered_projects.sort(key=lambda x: x.get("title", "").lower(), reverse=True)
+    elif sort_by == "id_desc":
+        filtered_projects.sort(key=lambda x: x.get("id", 0), reverse=True)
+    else: # id_asc
+        filtered_projects.sort(key=lambda x: x.get("id", 0))
+
+    total_items = len(filtered_projects)
+    total_pages = math.ceil(total_items / per_page) if total_items > 0 else 1
+    
+    # Bound page number
+    if page < 1:
+        page = 1
+    elif page > total_pages:
+        page = total_pages
+        
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    
+    paginated_projects = filtered_projects[start_idx:end_idx]
+
+    # Also pass filter dropdown options to UI
+    available_levels = get_available_levels()
+    stats = get_project_stats()
+    
+    return render_template(
+        "explore.html",
+        projects=paginated_projects,
+        page=page,
+        total_pages=total_pages,
+        total_items=total_items,
+        search=search_query,
+        level=level_filter,
+        interest=interest_filter,
+        time=time_filter,
+        sort=sort_by,
+        available_levels=available_levels,
+        stats=stats,
+        config=Config
+    )
 
 @main.route("/contact")
 def contact():
@@ -134,7 +216,7 @@ def recommend():
         return jsonify({"error": "Request body must be valid JSON."}), 400
 
     # Reject non-string values (e.g. null, lists, numbers) before calling .strip()
-    string_fields = ("skills", "level", "interest", "time", "tech_stack")
+    string_fields = ("skills", "level", "time", "tech_stack")
     for field in string_fields:
         value = payload.get(field)
         if value is not None and not isinstance(value, str):
@@ -142,9 +224,16 @@ def recommend():
 
     skills            = (payload.get("skills") or "").strip()
     level             = (payload.get("level") or "").strip()
-    interest          = (payload.get("interest") or "").strip()
     time_availability = (payload.get("time") or "").strip()
     tech_stack        = (payload.get("tech_stack") or "").strip()
+
+    interest = payload.get("interest")
+    if isinstance(interest, str):
+        interest = [interest.strip()]
+    elif isinstance(interest, list):
+        interest = [i.strip() for i in interest if isinstance(i, str)]
+    else:
+        interest = []
 
     # Explicitly check if skills string field is empty to prevent underlying scoring engine crashes
     if not skills:
@@ -156,20 +245,28 @@ def recommend():
         # Return only the first error to keep the UI message clean
         return jsonify({"error": errors[0]}), 400
 
-    if interest_has_no_projects(interest):
+    if interest and all(interest_has_no_projects(i) for i in interest):
         return jsonify({
             "projects": [],
-            "message": "No projects are currently available for this interest area. Please check back later."
+            "message": "No projects are currently available for your selected interest areas. Please check back later."
         }), 200
 
     recommendations_data = get_recommendations(
-    skills,
-    level,
-    interest,
-    time_availability,
-    tech_stack,
-    max_results=None,)
+        skills,
+        level,
+        interest,
+        time_availability,
+        tech_stack,
+        max_results=None,
+    )
     results = recommendations_data.get("recommendations", [])
+
+    if not results:
+        diagnostic_message = diagnose_empty_state(skills, level, interest, time_availability)
+        return jsonify({
+            "projects": [],
+            "message": diagnostic_message
+        }), 200
 
     # Ensure all projects have IDs in the response
     projects_data = []
@@ -283,6 +380,113 @@ def download_code(project_id):
     filename = os.path.basename(full_path)
     file_dir = os.path.dirname(full_path)
     return send_from_directory(file_dir, filename, as_attachment=True)
+
+
+@main.route("/project/<int:project_id>/export_github", methods=["POST"])
+def export_github(project_id):
+    """Create a new GitHub repository for the user and push starter code."""
+    token = session.get('github_token')
+    if not token or 'access_token' not in token:
+        flash("You must be logged in with GitHub to export projects.", "error")
+        return redirect(url_for('auth.login'))
+
+    project = find_project_by_id(project_id)
+    if not project:
+        abort(404)
+
+    full_path = resolve_starter_file(project)
+    if not full_path:
+        flash("Starter code not available for this project.", "error")
+        return redirect(url_for('main.project_detail', project_id=project_id))
+
+    # Read the starter code file
+    try:
+        with open(full_path, "rb") as f:
+            content_bytes = f.read()
+            content_b64 = base64.b64encode(content_bytes).decode('utf-8')
+    except Exception as e:
+        flash(f"Error reading starter code: {str(e)}", "error")
+        return redirect(url_for('main.project_detail', project_id=project_id))
+
+    filename = os.path.basename(full_path)
+    
+    # Generate repository name
+    import re
+    safe_title = re.sub(r'[^a-zA-Z0-9-]', '-', project['title'].lower())
+    repo_name = f"DevPath-Starter-{safe_title}"
+
+    headers = {
+        "Authorization": f"Bearer {token['access_token']}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    # 1. Get the current user's GitHub username to construct URLs later
+    user_resp = requests.get("https://api.github.com/user", headers=headers)
+    if user_resp.status_code == 401:
+        flash("Your GitHub session has expired or the token is invalid. Please log in again.", "error")
+        session.pop('github_token', None)
+        return redirect(url_for('auth.login'))
+    elif user_resp.status_code == 403:
+        flash("GitHub API rate limit exceeded. Please try again later.", "error")
+        return redirect(url_for('main.project_detail', project_id=project_id))
+    elif user_resp.status_code != 200:
+        flash("Failed to retrieve your GitHub profile.", "error")
+        return redirect(url_for('main.project_detail', project_id=project_id))
+    
+    username = user_resp.json().get('login')
+
+    # 2. Create the repository
+    repo_payload = {
+        "name": repo_name,
+        "description": f"Starter code for DevPath project: {project['title']}",
+        "private": False,
+        "auto_init": False
+    }
+    
+    create_resp = requests.post("https://api.github.com/user/repos", json=repo_payload, headers=headers)
+    
+    if create_resp.status_code == 422:
+        # 422 usually means the repository already exists
+        pass
+    elif create_resp.status_code == 403:
+        flash("GitHub API rate limit exceeded or lack of permissions. Please try again later.", "error")
+        return redirect(url_for('main.project_detail', project_id=project_id))
+    elif create_resp.status_code == 401:
+        flash("GitHub authorization failed. Please log in again.", "error")
+        session.pop('github_token', None)
+        return redirect(url_for('auth.login'))
+    elif create_resp.status_code != 201:
+        flash(f"Failed to create repository. GitHub API responded with {create_resp.status_code}.", "error")
+        return redirect(url_for('main.project_detail', project_id=project_id))
+        
+    # If 422, the repo might already exist, which is fine, we can try to push the file anyway.
+
+    # 3. Create the file in the repository
+    file_payload = {
+        "message": "Initial commit from DevPath \U0001f680",
+        "content": content_b64
+    }
+    
+    put_resp = requests.put(
+        f"https://api.github.com/repos/{username}/{repo_name}/contents/{filename}",
+        json=file_payload,
+        headers=headers
+    )
+    
+    if put_resp.status_code in (201, 200):
+        # 201 Created, 200 OK (updated)
+        flash("Successfully exported to GitHub!", "success")
+        return redirect(f"https://github.com/{username}/{repo_name}")
+    elif put_resp.status_code == 422:
+        flash(f"File {filename} already exists in repository {repo_name}.", "warning")
+        return redirect(f"https://github.com/{username}/{repo_name}")
+    elif put_resp.status_code == 409:
+        flash("Conflict updating the file. The repository might have diverging commits.", "error")
+        return redirect(url_for('main.project_detail', project_id=project_id))
+    else:
+        flash(f"Repository created, but failed to upload file. Status: {put_resp.status_code}", "error")
+        return redirect(url_for('main.project_detail', project_id=project_id))
+
 
 
 @main.route("/sitemap.xml")
@@ -881,6 +1085,35 @@ def update_project_progress(project_id):
 
     db.session.commit()
     return jsonify({"message": "Progress saved successfully"}), 200
+@main.route("/api/user-progress", methods=["GET"])
+def get_user_game_progress():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    progress = UserGameProgress.query.filter_by(user_id=user_id).first()
+    return jsonify({"data": progress.data if progress else {}}), 200
+
+@main.route("/api/user-progress", methods=["POST"])
+def save_user_game_progress():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    payload = request.get_json(silent=True)
+    if not payload or "data" not in payload:
+        return jsonify({"error": "Invalid payload. Expected 'data'."}), 400
+
+    progress = UserGameProgress.query.filter_by(user_id=user_id).first()
+    if progress:
+        progress.data = payload["data"]
+    else:
+        progress = UserGameProgress(user_id=user_id, data=payload["data"])
+        db.session.add(progress)
+
+    db.session.commit()
+    return jsonify({"message": "Progress saved successfully"}), 200
+
 @main.route("/api/portfolio-analysis", methods=["POST"])
 def portfolio_analysis():
     """
@@ -892,8 +1125,6 @@ def portfolio_analysis():
 
     if payload is None:
         return jsonify({"error": "Invalid JSON payload"}), 400
-
-    print(payload)
 
     completed_ids = payload.get("completed_projects", [])
 

@@ -13,12 +13,20 @@ from utils.recommender import (
     parse_skills,
     score_single_project,
     SCORING_WEIGHTS,
+    VALID_LEVELS,
+    VALID_INTERESTS,
+    VALID_TIME_AVAILABILITY,
+    SKILL_SYNONYMS,
+    WEIGHT_LEVEL,
+    WEIGHT_INTEREST,
+    WEIGHT_TIME,
 )
 from utils.roadmap_comparer import compare_roadmaps, load_all_career_roadmaps
 
 
 from app import app, internal_server_error
 from utils.roadmap_comparer import load_all_career_roadmaps, compare_roadmaps
+from utils.data_loader import clear_cache
 
 
 # ============================================================
@@ -26,9 +34,76 @@ from utils.roadmap_comparer import load_all_career_roadmaps, compare_roadmaps
 # ============================================================
 
 def setup_module():
+    """Clear the data cache before running the test suite to ensure clean state."""
+    import tempfile
+    import os
+    db_fd, db_path = tempfile.mkstemp()
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
     app.config["TESTING"] = True
     app.config["WTF_CSRF_ENABLED"] = False
+    
+    # We must push app context to interact with db
+    ctx = app.app_context()
+    ctx.push()
+    
+    from models import db, Project
+    db.drop_all()
+    db.create_all()
+    
+    # Load from JSON once to seed in-memory db
+    import json
+    data_file = os.path.join(os.path.dirname(__file__), "..", "data", "projects.json")
+    with open(data_file, "r", encoding="utf-8") as f:
+        projects_data = json.load(f)
+        for p_data in projects_data:
+            project = Project(
+                id=p_data.get("id"),
+                title=p_data.get("title", ""),
+                level=p_data.get("level", "Beginner"),
+                interest=p_data.get("interest", ""),
+                time=p_data.get("time", "Low"),
+                description=p_data.get("description", ""),
+                skills=p_data.get("skills", []),
+                features=p_data.get("features", []),
+                tech_stack=p_data.get("tech_stack", []),
+                roadmap=p_data.get("roadmap", []),
+                resources=p_data.get("resources", []),
+                starter_code=p_data.get("starter_code")
+            )
+            db.session.add(project)
+        db.session.commit()
     clear_cache()
+    
+    # We must push app context to interact with db
+    ctx = app.app_context()
+    ctx.push()
+    
+    from models import db, Project
+    db.drop_all()
+    db.create_all()
+    
+    # Load from JSON once to seed in-memory db
+    import json
+    data_file = os.path.join(os.path.dirname(__file__), "..", "data", "projects.json")
+    with open(data_file, "r", encoding="utf-8") as f:
+        projects_data = json.load(f)
+        for p_data in projects_data:
+            project = Project(
+                id=p_data.get("id"),
+                title=p_data.get("title", ""),
+                level=p_data.get("level", "Beginner"),
+                interest=p_data.get("interest", ""),
+                time=p_data.get("time", "Low"),
+                description=p_data.get("description", ""),
+                skills=p_data.get("skills", []),
+                features=p_data.get("features", []),
+                tech_stack=p_data.get("tech_stack", []),
+                roadmap=p_data.get("roadmap", []),
+                resources=p_data.get("resources", []),
+                starter_code=p_data.get("starter_code")
+            )
+            db.session.add(project)
+        db.session.commit()
 
 
 # ============================================================
@@ -60,7 +135,39 @@ def test_parse_skills():
     assert parse_skills("") == []
 
 
-def test_score_project():
+def test_parse_skills_valid_json_array():
+    """parse_skills should parse a valid JSON array of skills."""
+    result = parse_skills('["Python","React"]')
+    assert result == ["python", "react"]
+
+
+def test_parse_skills_malformed_json_handling():
+    """parse_skills should handle malformed JSON gracefully using fallback."""
+    # Should not crash, and parses via fallback comma-splitting behavior
+    result = parse_skills('["Python",]')
+    assert isinstance(result, list)
+    assert len(result) > 0
+
+
+def test_parse_skills_legacy_fallback():
+    """parse_skills should parse a legacy comma-separated string."""
+    result = parse_skills("Python,React")
+    assert result == ["python", "react"]
+
+
+def test_parse_skills_containing_commas():
+    """parse_skills should preserve skill names containing commas when using JSON."""
+    result = parse_skills('["HTML, CSS","JavaScript"]')
+    assert result == ["html, css", "javascript"]
+def test_parse_skills_duplicate_entries():
+    """Duplicate skills should not crash parsing."""
+    result = parse_skills("Python,Python,Python")
+
+    assert isinstance(result, list)
+    assert len(result) > 0
+
+def test_score_single_project_full_match():
+    """A project that matches all four criteria should receive the maximum score."""
     project = {
         "skills": ["Python"],
         "level": "Beginner",
@@ -114,7 +221,7 @@ def test_score_coverage_ratio_exact_values():
     # 1 of 2 skills matched: coverage = 0.5, score = 1 * 3 * 0.5 = 1.5
     score_result = score_single_project(project, ["python"], "Advanced", "Games", "High")[0]
     score = score_result[0] if isinstance(score_result, tuple) else score_result
-    assert score == pytest.approx(2.5), f"Expected 1.5 but got {score}"
+    assert score == pytest.approx(2.5), f"Expected 2.5 but got {score}"
 
     # 2 of 2 skills matched: coverage = 1.0, score = 2 * 3 * 1.0 = 6.0. Python + Flask has 1.5x synergy multiplier: 6.0 * 1.5 = 9.0
     score_result = score_single_project(project, ["python", "flask"], "Advanced", "Games", "High")
@@ -128,7 +235,7 @@ def test_score_no_project_skills_does_not_crash():
     score_result = score_single_project(project, ["python"], "Beginner", "Data", "Low")
     # Skill score is 0, but other criteria still score
     score = score_result[0] if isinstance(score_result, tuple) else score_result
-    assert score == pytest.approx(SCORING_WEIGHTS["level"] + SCORING_WEIGHTS["interest"] + SCORING_WEIGHTS["time"])  # 2+2+1 = 5
+    assert score == pytest.approx(SCORING_WEIGHTS["level"] + SCORING_WEIGHTS["interest"] + SCORING_WEIGHTS["time"])
 
 
 def test_score_three_skills_partial_coverage():
@@ -188,13 +295,13 @@ def test_score_single_project_alias_matching():
 def test_get_recommendations_returns_results():
     """Python + Beginner + Data + Low should always return at least one result."""
     results = get_recommendations("Python", "Beginner", "Data", "Low")
-    assert len(results) > 0, "Expected at least one recommendation"
+    assert len(results.get("recommendations", [])) > 0, "Expected at least one recommendation"
 
 
 def test_get_recommendations_max_three():
     """The engine must never return more than three results."""
     results = get_recommendations("Python, JavaScript, HTML", "Beginner", "Web", "Low")
-    assert len(results) <= 3, f"Expected at most 3 results, got {len(results)}"
+    assert len(results.get("recommendations", [])) <= 3, f"Expected at most 3 results, got {len(results.get('recommendations', []))}"
 
 
 def test_get_recommendations_result_format():
@@ -207,10 +314,26 @@ def test_get_recommendations_result_format():
 
 def test_case_insensitive_recommendations_identical():
     """Lowercase and titlecase skill inputs must produce identical recommendations."""
-    results_lower = get_recommendations("python", "Beginner", "Data", "Low")
-    results_title = get_recommendations("Python", "Beginner", "Data", "Low")
-    assert [p["id"] for p in results_lower.get("recommendations", [])] == [p["id"] for p in results_title.get("recommendations", [])]
+    results_lower = get_recommendations("python", "Beginner", "Data", "Low").get("recommendations", [])
+    results_title = get_recommendations("Python", "Beginner", "Data", "Low").get("recommendations", [])
+    assert [p["id"] for p in results_lower] == [p["id"] for p in results_title]
+def test_recommendations_are_deterministic():
+    """Same inputs should always return the same ordering."""
+    first = get_recommendations(
+        "Python",
+        "Beginner",
+        "Data",
+        "Low"
+    )
 
+    second = get_recommendations(
+        "Python",
+        "Beginner",
+        "Data",
+        "Low"
+    )
+
+    assert first["recommendations"] == second["recommendations"]
 
 def test_whitespace_stripped_in_skills():
     """Leading/trailing whitespace in the skills string must be ignored."""
@@ -231,7 +354,73 @@ def test_validate_inputs():
 def test_validate_missing_fields():
     errors = validate_recommendation_inputs("", "", "", "")
     assert len(errors) == 4
+def test_valid_constant_lists_not_empty():
+    assert len(VALID_LEVELS) > 0
+    assert len(VALID_TIME_AVAILABILITY) > 0
+def test_validate_whitespace_only_fields():
+    """Whitespace-only values should be treated as empty."""
+    errors = validate_recommendation_inputs(
+        "   ",
+        "   ",
+        "   ",
+        "   "
+    )
 
+def test_skill_synonym_matching():
+    """parse_skills must normalize common abbreviations to their canonical names.
+
+    Verifies that:
+    - "JS"     -> "javascript"
+    - "ReactJS" -> "react"
+    - "  ts  "  -> "typescript"  (extra whitespace stripped)
+    - trailing comma produces no empty entry
+    """
+    result = parse_skills("JS, ReactJS,  ts , ")
+    assert result == ["javascript", "react", "typescript"], (
+        f"Expected ['javascript', 'react', 'typescript'] but got {result}"
+    )
+
+
+def test_skill_synonym_matching_node():
+    """'node' and 'nodejs' must both resolve to 'node.js'."""
+    assert parse_skills("node")   == ["node.js"]
+    assert parse_skills("nodejs") == ["node.js"]
+
+
+def test_skill_synonym_matching_unknown_passthrough():
+    """Skills not present in SKILL_SYNONYMS must pass through unchanged."""
+    result = parse_skills("flutter, solidity")
+    assert result == ["flutter", "solidity"], (
+        f"Unknown skills should not be altered; got {result}"
+    )
+
+
+def test_skill_synonym_end_to_end_scoring():
+    """A user who inputs 'JS' must score the same as one who inputs 'javascript'.
+
+    This is the critical integration check: synonym normalisation in parse_skills
+    must translate all the way through score_single_project.
+    """
+    project = {
+        "skills": ["JavaScript"],
+        "level": "Beginner",
+        "interest": "Web",
+        "time": "Low",
+    }
+    score_abbrev   = score_single_project(project, parse_skills("JS"),         "Beginner", "Web", "Low")
+    score_canonical = score_single_project(project, parse_skills("JavaScript"), "Beginner", "Web", "Low")
+
+    assert score_abbrev > 0, "'JS' should score > 0 for a JavaScript project after synonym resolution"
+    assert score_abbrev == score_canonical, (
+        f"'JS' ({score_abbrev}) and 'javascript' ({score_canonical}) should produce identical scores"
+    )
+
+
+def test_skill_synonyms_dict_has_minimum_entries():
+    """SKILL_SYNONYMS must contain at least 10 entries to satisfy the issue requirement."""
+    assert len(SKILL_SYNONYMS) >= 10, (
+        f"Expected at least 10 synonym entries, found {len(SKILL_SYNONYMS)}"
+    )
 
 # ============================================================
 # Flask Route Tests
@@ -239,6 +428,7 @@ def test_validate_missing_fields():
 
 def get_client():
     app.config["TESTING"] = True
+    app.config["WTF_CSRF_ENABLED"] = False
     return app.test_client()
 
 
@@ -248,6 +438,31 @@ def test_home_route():
     assert response.status_code == 200
 
 
+def test_explore_route():
+    """Explore route should return 200 OK and handle pagination."""
+    client = get_client()
+    response = client.get("/explore?page=1&per_page=5")
+    assert response.status_code == 200
+    html = response.data.decode("utf-8")
+    assert "Explore All Projects" in html
+    # The max per_page is 5, so there should be pagination controls or fewer items.
+    assert 'class="project-card"' in html
+
+def test_contact_page_renders_send_message_form():
+    """Contact page should include the external form handler and required fields."""
+    client = get_client()
+    response = client.get("/contact")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert 'class="contact-form"' in html
+    assert 'action="https://api.web3forms.com/submit"' in html
+    assert 'method="POST"' in html
+    assert 'name="name"' in html
+    assert 'name="email"' in html
+    assert 'name="message"' in html
+    assert "Send Message" in html
 def test_security_headers_present():
     """Security headers should be included in all responses."""
     client = get_client()
@@ -264,22 +479,112 @@ def test_security_headers_present():
         == "geolocation=(), microphone=(), camera=()"
     )
 
-def test_recommend_api():
+def test_recommend_api_single_interest():
     client = get_client()
     response = client.post("/api/recommend", json={
         "skills": "Python",
         "level": "Beginner",
-        "interest": "Data",
+        "interest": ["Data"],
         "time": "Low"
     })
-
     assert response.status_code == 200
-
     data = response.get_json()
     assert "projects" in data
 
+def test_recommend_api_multiple_interests_overlapping():
+    client = get_client()
+    response = client.post("/api/recommend", json={
+        "skills": "Python",
+        "level": "Beginner",
+        "interest": ["Data", "Web"],
+        "time": "Low"
+    })
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "projects" in data
 
-def test_project_not_found():
+def test_recommend_api_multiple_interests_one_empty():
+    client = get_client()
+    response = client.post("/api/recommend", json={
+        "skills": "Python",
+        "level": "Beginner",
+        "interest": ["Data", "artificial intelligence"],
+        "time": "Low"
+    })
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "projects" in data
+    assert len(data["projects"]) > 0
+
+def test_recommend_api_multiple_interests_all_empty():
+    client = get_client()
+    response = client.post("/api/recommend", json={
+        "skills": "Python",
+        "level": "Beginner",
+        "interest": ["artificial intelligence", "cloud computing"],
+        "time": "Low"
+    })
+    assert response.status_code == 200
+    data = response.get_json()
+    assert len(data["projects"]) == 0
+    assert "No projects are currently available" in data["message"]
+
+def test_recommend_api_empty_selection():
+    client = get_client()
+    response = client.post("/api/recommend", json={
+        "skills": "Python",
+        "level": "Beginner",
+        "interest": [],
+        "time": "Low"
+    })
+    assert response.status_code == 400
+    data = response.get_json()
+    assert "error" in data
+
+
+def test_recommend_api_empty_body():
+    """The API should return 400 when the body is not valid JSON."""
+    client = get_client()
+    response = client.post("/api/recommend",
+                           data="not json",
+                           content_type="text/plain")
+    assert response.status_code in (400, 415)
+def test_recommend_api_no_body():
+    """POST with no body should fail gracefully."""
+    client = get_client()
+
+    response = client.post("/api/recommend")
+
+    assert response.status_code in (400, 415)
+def test_recommend_api_malformed_json():
+    """Malformed JSON should never produce a 500."""
+    client = get_client()
+
+    response = client.post(
+        "/api/recommend",
+        data='{"skills":"Python"',
+        content_type="application/json"
+    )
+
+    assert response.status_code in (400, 415)
+def test_recommend_api_wrong_content_type():
+    """Unexpected content types should be rejected safely."""
+    client = get_client()
+
+    response = client.post(
+        "/api/recommend",
+        data="skills=Python",
+        content_type="application/x-www-form-urlencoded"
+    )
+
+    assert response.status_code in (400, 415)
+def test_project_detail_found():
+    client = get_client()
+    response = client.get("/project/1")
+    assert response.status_code == 200
+
+
+def test_project_detail_not_found():
     client = get_client()
     response = client.get("/project/99999")
     assert response.status_code == 404
@@ -376,7 +681,10 @@ def test_scoring_weights_has_all_keys():
     """Verify SCORING_WEIGHTS contains exactly the four expected keys."""
     expected_keys = {"skill", "level", "interest", "time"}
     assert set(SCORING_WEIGHTS.keys()) == expected_keys
-
+def test_scoring_weights_are_positive():
+    """All scoring weights should remain positive."""
+    for value in SCORING_WEIGHTS.values():
+        assert value > 0
 def test_search_api_returns_results():
     """Search API should return matching projects for a valid query."""
     client = get_client()
@@ -386,7 +694,6 @@ def test_search_api_returns_results():
     assert isinstance(data, list)
 
 def test_search_api_empty_query():
-    """Search API should return an empty list for blank queries."""
     client = get_client()
     response = client.get("/api/search?q=")
     assert response.status_code == 200
@@ -398,10 +705,37 @@ def test_search_api_no_match():
     client = get_client()
     response = client.get("/api/search?q=nonexistentqueryxyz")
     assert response.status_code == 200
-
     data = response.get_json()
     assert isinstance(data, list)
     assert len(data) == 0
+
+def test_recommend_api_internal_failure(monkeypatch):
+    """Recommendation engine failures should not crash the API."""
+
+    import routes.main_routes as main_routes
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("forced failure")
+
+    monkeypatch.setattr(
+        main_routes,
+        "get_recommendations",
+        broken
+    )
+
+    client = get_client()
+
+    response = client.post(
+        "/api/recommend",
+        json={
+            "skills": "Python",
+            "level": "Beginner",
+            "interest": "Data",
+            "time": "Low"
+        }
+    )
+
+    assert response.status_code == 500
 # ============================================================
 # Sitemap and robots.txt tests
 # ============================================================
@@ -664,6 +998,95 @@ def test_admin_crud():
         
         with app.app_context():
             assert db.session.get(Project, project_id) is None
+
+
+# ============================================================
+# GitHub Export tests
+# ============================================================
+
+def test_export_github_unauthenticated():
+    """Unauthenticated users should be redirected to login when trying to export."""
+    client = get_client()
+    response = client.post("/project/1/export_github")
+    assert response.status_code == 302
+    assert "/auth/login" in response.headers["Location"]
+
+def test_export_github_missing_starter_code():
+    """Exporting a project without starter code should redirect back to the project."""
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['github_token'] = {'access_token': 'dummy_token'}
+            
+        # Assuming project 2 does not have starter code or we make a fake one
+        with app.app_context():
+            from models import db, Project
+            p = Project(id=999, title="No Code", level="Beg", interest="Web", time="Low", description="Desc")
+            db.session.add(p)
+            db.session.commit()
+            
+        response = client.post("/project/999/export_github")
+        assert response.status_code == 302
+        assert "/project/999" in response.headers["Location"]
+
+
+from unittest.mock import patch
+
+@patch("routes.main_routes.requests.get")
+@patch("routes.main_routes.requests.post")
+@patch("routes.main_routes.requests.put")
+def test_export_github_api_failures(mock_put, mock_post, mock_get):
+    """Test how the app handles different GitHub API failure status codes."""
+    # First, we need a project that actually has a starter code file to pass the file check
+    with app.app_context():
+        from models import db, Project
+        p = db.session.get(Project, 1000)
+        if not p:
+            p = Project(
+                id=1000, title="Valid Code", level="Beg", interest="Web", time="Low", 
+                description="Desc", starter_code="expense_tracker.py"
+            )
+            db.session.add(p)
+            db.session.commit()
+
+    # Test 401 Unauthorized
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['github_token'] = {'access_token': 'dummy_token'}
+            
+        mock_get.return_value.status_code = 401
+        response = client.post("/project/1000/export_github")
+        
+        assert response.status_code == 302
+        assert "/auth/login" in response.headers["Location"]
+        
+    # Test 403 Rate Limit on repo creation
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['github_token'] = {'access_token': 'dummy_token'}
+            
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {"login": "testuser"}
+        mock_post.return_value.status_code = 403
+        
+        response = client.post("/project/1000/export_github")
+        
+        assert response.status_code == 302
+        assert "/project/1000" in response.headers["Location"]
+
+    # Test 422 Conflict (repo exists) but file push succeeds
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['github_token'] = {'access_token': 'dummy_token'}
+            
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {"login": "testuser"}
+        mock_post.return_value.status_code = 422
+        mock_put.return_value.status_code = 201
+        
+        response = client.post("/project/1000/export_github")
+        
+        assert response.status_code == 302
+        assert "github.com/testuser/DevPath-Starter-valid-code" in response.headers["Location"]
 
 
 
