@@ -13,6 +13,10 @@
       // Storage can be unavailable in private browsing.
     }
 
+    if (document.body) {
+      document.body.classList.toggle("dark-theme", isDark);
+    }
+
     document.querySelectorAll(".theme-toggle").forEach(function (button) {
       button.setAttribute("aria-pressed", isDark ? "true" : "false");
       button.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
@@ -238,6 +242,33 @@ function loadProgressState() {
   } catch (err) {
     console.warn("Unable to load progress state", err);
   }
+
+  fetch("/api/user-progress")
+    .then(function (r) {
+      if (!r.ok) throw new Error("Not authenticated");
+      return r.json();
+    })
+    .then(function (data) {
+      if (data.data && Object.keys(data.data).length > 0) {
+        var serverSaved = data.data;
+        if (typeof serverSaved === "object") {
+          var merged = {};
+          Object.keys(progress).forEach(function (k) {
+            if (Array.isArray(progress[k]) && Array.isArray(serverSaved[k])) {
+              merged[k] = serverSaved[k].length > progress[k].length ? serverSaved[k] : progress[k];
+            } else if (typeof progress[k] === "object" && progress[k] !== null && typeof serverSaved[k] === "object" && serverSaved[k] !== null) {
+              merged[k] = Object.assign({}, progress[k], serverSaved[k]);
+            } else {
+              merged[k] = serverSaved[k] !== undefined ? serverSaved[k] : progress[k];
+            }
+          });
+          progress = Object.assign(progress, merged);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+          updateProfileWidgets();
+        }
+      }
+    })
+    .catch(function () {});
 }
 
 function saveProgressState() {
@@ -247,6 +278,12 @@ function saveProgressState() {
   } catch (err) {
     console.warn("Unable to save progress state", err);
   }
+
+  fetch("/api/user-progress", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ data: progress }),
+  }).catch(function () {});
 }
 
 function computeProgressPoints() {
@@ -644,7 +681,7 @@ async function updatePortfolioAnalysis() {
       showFieldError("level-error", "Please select your experience level.");
       valid = false;
     }
-    if (!document.getElementById("interest").value) {
+    if (document.getElementById("interest").selectedOptions.length === 0 || document.getElementById("interest").selectedOptions[0].value === "") {
       showFieldError("interest-error", "Please select an area of interest.");
       valid = false;
     }
@@ -781,16 +818,35 @@ async function updatePortfolioAnalysis() {
       if (isSaved) saveBtn.classList.add("saved");
       saveBtn.setAttribute("aria-pressed", isSaved ? "true" : "false");
       DevPathBookmarks.setButtonContent(saveBtn, isSaved);
-      saveBtn.addEventListener("click", function () {
-        DevPathBookmarks.toggle(project, saveBtn);
+      // Keep your bookmarking code
+      // Save button logic
+      saveBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        var projectObj = {
+          id: project.id,
+          title: project.title,
+          level: project.level,
+          time: project.time,
+          skills: project.skills || []
+        };
+        DevPathBookmarks.toggle(projectObj, saveBtn);
       });
+
+      // Also keep recently-viewed tracking code
       footer.appendChild(saveBtn);
+      footer.appendChild(link);
     }
 
     var link = document.createElement("a");
     link.className = "btn-details";
     link.textContent = "View Full Project";
     link.href = "/project/" + project.id;
+    
+    link.addEventListener("click", function() {
+      if (typeof RecentlyViewed !== "undefined") {
+        RecentlyViewed.trackView(project);
+      }
+    });
     footer.appendChild(link);
 
     card.appendChild(title);
@@ -923,9 +979,11 @@ async function updatePortfolioAnalysis() {
     showMoreBtn.style.display = "none";
     allProjects = [];
     visibleProjectCount = PROJECTS_PER_LOAD;
+    if (typeof RecentlyViewed !== "undefined") {
+    RecentlyViewed.clearHistory();
+    }    
     if (skillsInput) skillsInput.focus();
-  }
-
+  }  
   var clearBtn = document.getElementById("clear-filters-btn");
   if (clearBtn) {
     clearBtn.addEventListener("click", resetFormAndState);
@@ -981,7 +1039,7 @@ async function updatePortfolioAnalysis() {
           };
         })),
         level: document.getElementById("level").value,
-        interest: document.getElementById("interest").value,
+        interest: Array.from(document.getElementById("interest").selectedOptions).map(opt => opt.value),
         time: document.getElementById("time").value,
         tech_stack: techStackSelect ? techStackSelect.value : "all"
       })
@@ -1099,6 +1157,17 @@ async function updatePortfolioAnalysis() {
 (function initDetailPage() {
   if (typeof PROJECT_ID === "undefined") return;
   recordProjectView();
+  
+if (typeof RecentlyViewed !== "undefined") {
+  var projectTitle = typeof PROJECT_TITLE !== "undefined" ? PROJECT_TITLE : "Project " + PROJECT_ID;
+  var projectInterest = document.querySelector("[data-project-interest]");
+  var interest = projectInterest ? projectInterest.getAttribute("data-project-interest") : "General";
+  RecentlyViewed.trackView({
+    id: PROJECT_ID,
+    title: projectTitle,
+    interest: interest
+  });
+  }
 
   var codePanel = document.getElementById("code-panel");
   var codePanelOverlay = document.getElementById("code-panel-overlay");

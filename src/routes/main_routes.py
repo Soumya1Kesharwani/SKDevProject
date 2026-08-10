@@ -8,7 +8,7 @@ from flask import Blueprint, render_template, request, jsonify, send_from_direct
 from utils.recommender import get_recommendations, validate_recommendation_inputs
 from utils.data_loader import find_project_by_id, load_all_projects, get_available_levels, get_project_stats, get_available_interests
 from utils.roadmap_comparer import load_all_career_roadmaps, compare_roadmaps
-from utils.file_server import read_starter_code, resolve_starter_file, get_starter_code_dir
+from utils.file_server import read_starter_code, resolve_starter_file
 from utils.rate_limiter import rate_limit
 from utils.learning_path import (
     create_learning_path,
@@ -25,10 +25,10 @@ from utils.skill_progression import (
 )
 from utils.code_review import CodeReviewManager
 from config import Config
-from flask import jsonify
 from utils.portfolio_analyzer import analyze_portfolio
 import os
-from models import db, ProjectProgress
+import math
+from models import db, ProjectProgress, UserGameProgress
 
 _skill_validator = SkillProgressionValidator()
 _code_review_manager = CodeReviewManager()
@@ -61,12 +61,91 @@ def index():
         # In development, we prefer rendering a fallback homepage rather than
         # aborting entirely. Log the error and use safe defaults so UI/layout
         # checks can proceed.
-        print("Warning: failed to load project stats:", e)
         stats = {"total_projects": 0, "unique_skills": 0, "beginner_friendly": 0}
         available_levels = ["Beginner", "Intermediate", "Advanced"]
         available_interests = []
 
     return render_template("index.html", stats=stats, available_levels=available_levels, available_interests=available_interests, config=Config)
+
+@main.route("/explore")
+def explore():
+    """Render the explore page with server-side pagination, filtering, and sorting."""
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 12, type=int)
+    search_query = request.args.get("search", "").strip().lower()
+    level_filter = request.args.get("level", "").strip().lower()
+    interest_filter = request.args.get("interest", "").strip().lower()
+    time_filter = request.args.get("time", "").strip().lower()
+    sort_by = request.args.get("sort", "id_asc")
+
+    all_projects = load_all_projects()
+    filtered_projects = []
+
+    for p in all_projects:
+        # Search text
+        if search_query:
+            searchable_text = (
+                p.get("title", "") + " " + 
+                p.get("description", "") + " " + 
+                " ".join(p.get("skills", []))
+            ).lower()
+            if search_query not in searchable_text:
+                continue
+                
+        if level_filter and p.get("level", "").lower() != level_filter:
+            continue
+            
+        if interest_filter and p.get("interest", "").lower() != interest_filter:
+            continue
+            
+        if time_filter and p.get("time", "").lower() != time_filter:
+            continue
+            
+        filtered_projects.append(p)
+
+    # Sorting
+    if sort_by == "title_asc":
+        filtered_projects.sort(key=lambda x: x.get("title", "").lower())
+    elif sort_by == "title_desc":
+        filtered_projects.sort(key=lambda x: x.get("title", "").lower(), reverse=True)
+    elif sort_by == "id_desc":
+        filtered_projects.sort(key=lambda x: x.get("id", 0), reverse=True)
+    else: # id_asc
+        filtered_projects.sort(key=lambda x: x.get("id", 0))
+
+    total_items = len(filtered_projects)
+    total_pages = math.ceil(total_items / per_page) if total_items > 0 else 1
+    
+    # Bound page number
+    if page < 1:
+        page = 1
+    elif page > total_pages:
+        page = total_pages
+        
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    
+    paginated_projects = filtered_projects[start_idx:end_idx]
+
+    # Also pass filter dropdown options to UI
+    available_levels = get_available_levels()
+    stats = get_project_stats()
+    
+    return render_template(
+        "explore.html",
+        projects=paginated_projects,
+        page=page,
+        total_pages=total_pages,
+        total_items=total_items,
+        search=search_query,
+        level=level_filter,
+        interest=interest_filter,
+        time=time_filter,
+        sort=sort_by,
+        available_levels=available_levels,
+        stats=stats,
+        config=Config
+    )
 
 @main.route("/contact")
 def contact():
@@ -134,7 +213,7 @@ def recommend():
         return jsonify({"error": "Request body must be valid JSON."}), 400
 
     # Reject non-string values (e.g. null, lists, numbers) before calling .strip()
-    string_fields = ("skills", "level", "interest", "time", "tech_stack")
+    string_fields = ("skills", "level", "time", "tech_stack")
     for field in string_fields:
         value = payload.get(field)
         if value is not None and not isinstance(value, str):
@@ -142,9 +221,16 @@ def recommend():
 
     skills            = (payload.get("skills") or "").strip()
     level             = (payload.get("level") or "").strip()
-    interest          = (payload.get("interest") or "").strip()
     time_availability = (payload.get("time") or "").strip()
     tech_stack        = (payload.get("tech_stack") or "").strip()
+
+    interest = payload.get("interest")
+    if isinstance(interest, str):
+        interest = [interest.strip()]
+    elif isinstance(interest, list):
+        interest = [i.strip() for i in interest if isinstance(i, str)]
+    else:
+        interest = []
 
     # Explicitly check if skills string field is empty to prevent underlying scoring engine crashes
     if not skills:
@@ -156,10 +242,10 @@ def recommend():
         # Return only the first error to keep the UI message clean
         return jsonify({"error": errors[0]}), 400
 
-    if interest_has_no_projects(interest):
+    if interest and all(interest_has_no_projects(i) for i in interest):
         return jsonify({
             "projects": [],
-            "message": "No projects are currently available for this interest area. Please check back later."
+            "message": "No projects are currently available for your selected interest areas. Please check back later."
         }), 200
 
     recommendations_data = get_recommendations(
@@ -881,6 +967,35 @@ def update_project_progress(project_id):
 
     db.session.commit()
     return jsonify({"message": "Progress saved successfully"}), 200
+@main.route("/api/user-progress", methods=["GET"])
+def get_user_game_progress():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    progress = UserGameProgress.query.filter_by(user_id=user_id).first()
+    return jsonify({"data": progress.data if progress else {}}), 200
+
+@main.route("/api/user-progress", methods=["POST"])
+def save_user_game_progress():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    payload = request.get_json(silent=True)
+    if not payload or "data" not in payload:
+        return jsonify({"error": "Invalid payload. Expected 'data'."}), 400
+
+    progress = UserGameProgress.query.filter_by(user_id=user_id).first()
+    if progress:
+        progress.data = payload["data"]
+    else:
+        progress = UserGameProgress(user_id=user_id, data=payload["data"])
+        db.session.add(progress)
+
+    db.session.commit()
+    return jsonify({"message": "Progress saved successfully"}), 200
+
 @main.route("/api/portfolio-analysis", methods=["POST"])
 def portfolio_analysis():
     """
@@ -892,8 +1007,6 @@ def portfolio_analysis():
 
     if payload is None:
         return jsonify({"error": "Invalid JSON payload"}), 400
-
-    print(payload)
 
     completed_ids = payload.get("completed_projects", [])
 

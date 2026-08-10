@@ -1,0 +1,60 @@
+name: Contributor Self-Assignment
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    # Only trigger if the comment is on an issue (not PR) and contains /assign
+    if: |
+      github.event.issue.pull_request == null &&
+      contains(github.event.comment.body, '/assign')
+
+    steps:
+      - name: Self Assign Issue
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const commenter = context.payload.comment.user.login;
+            const issueNumber = context.issue.number;
+            const assignees = context.payload.issue.assignees;
+
+            // Check if issue is already assigned
+            if (assignees && assignees.length > 0) {
+              const alreadyAssigned = assignees.some(a => a.login === commenter);
+              if (alreadyAssigned) {
+                console.log(`Issue #${issueNumber} is already assigned to the commenter.`);
+                return;
+              }
+
+              // Issue is assigned to someone else, notify commenter
+              const currentAssignees = assignees.map(a => `@${a.login}`).join(', ');
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `Hey @${commenter}, this issue is already assigned to ${currentAssignees}. Please find another open issue!`
+              });
+              return;
+            }
+
+            // Assign the issue to the commenter
+            await github.rest.issues.addAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              assignees: [commenter]
+            });
+
+            // Post confirmation comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: `Hey @${commenter}, you have been assigned to this issue! Happy contributing! 🎉`
+            });
