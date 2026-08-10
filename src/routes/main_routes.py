@@ -26,6 +26,7 @@ from utils.skill_progression import (
 from utils.code_review import CodeReviewManager
 from config import Config
 from utils.portfolio_analyzer import analyze_portfolio
+from utils.pagination import parse_pagination
 import math
 import os
 import base64
@@ -73,8 +74,10 @@ def index():
 @main.route("/explore")
 def explore():
     """Render the explore page with server-side pagination, filtering, and sorting."""
-    page = request.args.get("page", 1, type=int)
-    per_page = request.args.get("per_page", 12, type=int)
+    page, per_page = parse_pagination(
+        request.args.get("page", 1, type=int),
+        request.args.get("per_page", 12, type=int),
+    )
     search_query = request.args.get("search", "").strip().lower()
     level_filter = request.args.get("level", "").strip().lower()
     interest_filter = request.args.get("interest", "").strip().lower()
