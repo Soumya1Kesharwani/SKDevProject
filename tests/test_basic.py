@@ -26,6 +26,7 @@ from utils.roadmap_comparer import compare_roadmaps, load_all_career_roadmaps
 
 from app import app, internal_server_error
 from utils.roadmap_comparer import load_all_career_roadmaps, compare_roadmaps
+from utils.data_loader import clear_cache
 
 
 # ============================================================
@@ -72,6 +73,37 @@ def setup_module():
             db.session.add(project)
         db.session.commit()
     clear_cache()
+    
+    # We must push app context to interact with db
+    ctx = app.app_context()
+    ctx.push()
+    
+    from models import db, Project
+    db.drop_all()
+    db.create_all()
+    
+    # Load from JSON once to seed in-memory db
+    import json
+    data_file = os.path.join(os.path.dirname(__file__), "..", "data", "projects.json")
+    with open(data_file, "r", encoding="utf-8") as f:
+        projects_data = json.load(f)
+        for p_data in projects_data:
+            project = Project(
+                id=p_data.get("id"),
+                title=p_data.get("title", ""),
+                level=p_data.get("level", "Beginner"),
+                interest=p_data.get("interest", ""),
+                time=p_data.get("time", "Low"),
+                description=p_data.get("description", ""),
+                skills=p_data.get("skills", []),
+                features=p_data.get("features", []),
+                tech_stack=p_data.get("tech_stack", []),
+                roadmap=p_data.get("roadmap", []),
+                resources=p_data.get("resources", []),
+                starter_code=p_data.get("starter_code")
+            )
+            db.session.add(project)
+        db.session.commit()
 
 
 # ============================================================
@@ -189,7 +221,7 @@ def test_score_coverage_ratio_exact_values():
     # 1 of 2 skills matched: coverage = 0.5, score = 1 * 3 * 0.5 = 1.5
     score_result = score_single_project(project, ["python"], "Advanced", "Games", "High")[0]
     score = score_result[0] if isinstance(score_result, tuple) else score_result
-    assert score == pytest.approx(2.5), f"Expected 1.5 but got {score}"
+    assert score == pytest.approx(2.5), f"Expected 2.5 but got {score}"
 
     # 2 of 2 skills matched: coverage = 1.0, score = 2 * 3 * 1.0 = 6.0. Python + Flask has 1.5x synergy multiplier: 6.0 * 1.5 = 9.0
     score_result = score_single_project(project, ["python", "flask"], "Advanced", "Games", "High")
@@ -263,13 +295,13 @@ def test_score_single_project_alias_matching():
 def test_get_recommendations_returns_results():
     """Python + Beginner + Data + Low should always return at least one result."""
     results = get_recommendations("Python", "Beginner", "Data", "Low")
-    assert len(results) > 0, "Expected at least one recommendation"
+    assert len(results.get("recommendations", [])) > 0, "Expected at least one recommendation"
 
 
 def test_get_recommendations_max_three():
     """The engine must never return more than three results."""
     results = get_recommendations("Python, JavaScript, HTML", "Beginner", "Web", "Low")
-    assert len(results) <= 3, f"Expected at most 3 results, got {len(results)}"
+    assert len(results.get("recommendations", [])) <= 3, f"Expected at most 3 results, got {len(results.get('recommendations', []))}"
 
 
 def test_get_recommendations_result_format():
