@@ -16,19 +16,20 @@ jobs:
 
       # Setup Python
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
       # Install dependencies
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pip install pytest
 
       # Run tests
       - name: Run tests
         run: |
-          python -m unittest tests/test_basic.py
+          PYTHONPATH=src pytest
 
       # Optional: Print success
       - name: Success message

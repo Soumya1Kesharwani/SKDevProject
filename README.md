@@ -189,6 +189,37 @@ All tests passed
 
 ---
 
+### Validate Repository Integrity
+
+Run DevPath Sentinel to validate both the project dataset and the repository's starter code.
+
+```bash
+python -m tools.sentinel.cli
+```
+
+DevPath Sentinel executes the following validators:
+
+#### Dataset Validator
+
+Checks for:
+
+- Duplicate project IDs
+- Duplicate project titles
+- Missing required fields
+- Empty required fields
+- Missing starter code references
+
+#### Starter Code Integrity Validator
+
+Checks for:
+
+- Orphan starter code files
+- Empty starter code files
+- Unsupported starter code file types
+- Hidden files inside the `starter_code/` directory
+
+---
+
 ## Troubleshooting
 
 <details>
