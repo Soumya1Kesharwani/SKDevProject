@@ -26,6 +26,7 @@ from utils.skill_progression import (
 from utils.code_review import CodeReviewManager
 from config import Config
 from utils.portfolio_analyzer import analyze_portfolio
+import math
 import os
 import base64
 import requests
