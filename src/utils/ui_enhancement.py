@@ -2,7 +2,7 @@
 
 from typing import Dict, List, Optional
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class AccessibilityLevel(Enum):
@@ -132,5 +132,5 @@ class UIEnhancementManager:
             "user_id": user_id,
             "from": from_page,
             "to": to_page,
-            "timestamp": str(datetime.utcnow()),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }

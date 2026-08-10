@@ -1,7 +1,7 @@
 """GDPR compliance and user data privacy system."""
 
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from cryptography.fernet import Fernet
 import os
 
@@ -45,7 +45,7 @@ class PrivacyManager:
             "data_processing": data_processing,
             "marketing": marketing,
             "analytics": analytics,
-            "consented_at": datetime.utcnow().isoformat(),
+            "consented_at": datetime.now(timezone.utc).isoformat(),
         }
         self.user_consent[user_id] = consent
         self._log_audit(f"Consent updated for user {user_id}")
@@ -57,13 +57,13 @@ class PrivacyManager:
 
     def request_data_export(self, user_id: str) -> Dict:
         """Create a user data export request (Right to Data Portability)."""
-        request_id = f"export_{user_id}_{datetime.utcnow().timestamp()}"
+        request_id = f"export_{user_id}_{datetime.now(timezone.utc).timestamp()}"
         request = {
             "request_id": request_id,
             "user_id": user_id,
             "type": "data_export",
             "status": "pending",
-            "requested_at": datetime.utcnow().isoformat(),
+            "requested_at": datetime.now(timezone.utc).isoformat(),
             "completed_at": None,
             "data_url": None,
         }
@@ -73,13 +73,13 @@ class PrivacyManager:
 
     def request_data_deletion(self, user_id: str) -> Dict:
         """Create a user data deletion request (Right to be Forgotten)."""
-        request_id = f"delete_{user_id}_{datetime.utcnow().timestamp()}"
+        request_id = f"delete_{user_id}_{datetime.now(timezone.utc).timestamp()}"
         request = {
             "request_id": request_id,
             "user_id": user_id,
             "type": "data_deletion",
             "status": "pending",
-            "requested_at": datetime.utcnow().isoformat(),
+            "requested_at": datetime.now(timezone.utc).isoformat(),
             "completed_at": None,
         }
         self.data_requests[request_id] = request
@@ -95,7 +95,7 @@ class PrivacyManager:
 
         request = self.data_requests[request_id]
         request["status"] = "completed"
-        request["completed_at"] = datetime.utcnow().isoformat()
+        request["completed_at"] = datetime.now(timezone.utc).isoformat()
         request["data_url"] = f"/api/privacy/export/{request_id}/download"
 
         self._log_audit(f"Data export completed for {request['user_id']}")
@@ -108,7 +108,7 @@ class PrivacyManager:
 
         request = self.data_requests[request_id]
         request["status"] = "completed"
-        request["completed_at"] = datetime.utcnow().isoformat()
+        request["completed_at"] = datetime.now(timezone.utc).isoformat()
 
         self._log_audit(f"Data deletion completed for {request['user_id']}")
         return request
@@ -135,7 +135,7 @@ class PrivacyManager:
         """Log privacy audit event."""
         self.audit_log.append(
             {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "message": message,
             }
         )
@@ -155,7 +155,7 @@ class PrivacyManager:
         return {
             "retention_days": days,
             "policy_active": True,
-            "effective_from": datetime.utcnow().isoformat(),
+            "effective_from": datetime.now(timezone.utc).isoformat(),
         }
 
     def anonymize_user_data(self, user_id: str) -> Dict:
@@ -163,6 +163,6 @@ class PrivacyManager:
         return {
             "user_id": user_id,
             "anonymized": True,
-            "anonymized_at": datetime.utcnow().isoformat(),
+            "anonymized_at": datetime.now(timezone.utc).isoformat(),
             "original_data_deleted": True,
         }
