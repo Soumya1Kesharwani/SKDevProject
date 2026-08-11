@@ -436,18 +436,29 @@ def export_github(project_id):
     username = user_resp.json().get('login')
 
     # 2. Create the repository
+    # Visibility defaults to private unless the user explicitly opts in to public.
+    visibility = (request.form.get("visibility") or "").strip().lower()
+    if visibility not in ("public", "private"):
+        visibility = "private"
+
     repo_payload = {
         "name": repo_name,
         "description": f"Starter code for DevPath project: {project['title']}",
-        "private": False,
+        "private": visibility != "public",
         "auto_init": False
     }
     
     create_resp = requests.post("https://api.github.com/user/repos", json=repo_payload, headers=headers)
     
     if create_resp.status_code == 422:
-        # 422 usually means the repository already exists
-        pass
+        # 422 means the repository already exists. Refuse to blind-push into an
+        # existing repository the user did not explicitly target.
+        flash(
+            f"Repository {repo_name} already exists on your GitHub account. "
+            "Rename or remove it, then try exporting again.",
+            "error",
+        )
+        return redirect(url_for('main.project_detail', project_id=project_id))
     elif create_resp.status_code == 403:
         flash("GitHub API rate limit exceeded or lack of permissions. Please try again later.", "error")
         return redirect(url_for('main.project_detail', project_id=project_id))
@@ -458,8 +469,6 @@ def export_github(project_id):
     elif create_resp.status_code != 201:
         flash(f"Failed to create repository. GitHub API responded with {create_resp.status_code}.", "error")
         return redirect(url_for('main.project_detail', project_id=project_id))
-        
-    # If 422, the repo might already exist, which is fine, we can try to push the file anyway.
 
     # 3. Create the file in the repository
     file_payload = {
