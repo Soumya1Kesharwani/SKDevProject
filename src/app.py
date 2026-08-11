@@ -130,7 +130,7 @@ def add_security_headers(response):
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data:; "
+        "img-src 'self' data: https://avatars.githubusercontent.com https://*.githubusercontent.com; "
         "font-src 'self'; "
         "connect-src 'self'; "
         "form-action 'self' https://formspree.io https://api.web3forms.com; "
