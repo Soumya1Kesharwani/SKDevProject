@@ -725,7 +725,7 @@ def get_recommendations(
     scored_projects.sort(key=lambda item: (-item["score"], int(item["project"].get("id", 0))))
     
     selected_projects = (
-      scored_projects
+      scored_projects[:MAX_RESULTS]
       if max_results is None
       else scored_projects[:max_results])
 
