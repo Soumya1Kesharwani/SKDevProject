@@ -39,8 +39,6 @@ _code_review_manager = CodeReviewManager()
 # Interest categories that currently have no project recommendations available
 NO_PROJECT_INTERESTS = {
     "machine learning/ai",
-    "devops",
-    "mobile",
     "artificial intelligence",
     "cloud computing",
     "mobile app development",
