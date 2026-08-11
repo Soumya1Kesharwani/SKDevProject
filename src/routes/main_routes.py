@@ -3,7 +3,7 @@
 # Each route is kept thin: it validates input, calls a utility function,
 # and returns a response. No business logic lives here.
 
-from flask import Blueprint, render_template, request, jsonify, send_from_directory, abort, make_response, redirect, url_for, session, flash
+from flask import Blueprint, render_template, request, jsonify, send_from_directory, abort, make_response, redirect, url_for, session, flash, current_app
 
 from utils.recommender import get_recommendations, validate_recommendation_inputs, diagnose_empty_state
 from utils.data_loader import find_project_by_id, load_all_projects, get_available_levels, get_project_stats, get_available_interests
@@ -707,7 +707,8 @@ def submit_code_for_review():
             "submission": submission
         }), 201
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        current_app.logger.exception("code review submit error: %s", e)
+        return jsonify({"error": "An internal error occurred."}), 400
 
 
 @main.route("/api/code-review/submission/<submission_id>")
@@ -775,7 +776,8 @@ def start_code_review():
             "review": review
         }), 201
     except ValueError as e:
-        return jsonify({"error": str(e)}), 404
+        current_app.logger.exception("code review start error: %s", e)
+        return jsonify({"error": "An internal error occurred."}), 404
 
 
 @main.route("/api/code-review/<review_id>/comment", methods=["POST"])
@@ -809,7 +811,8 @@ def add_review_comment(review_id):
             "comment": comment
         }), 201
     except ValueError as e:
-        return jsonify({"error": str(e)}), 404
+        current_app.logger.exception("code review comment error: %s", e)
+        return jsonify({"error": "An internal error occurred."}), 404
 
 
 @main.route("/api/code-review/<review_id>/score", methods=["POST"])
@@ -842,7 +845,8 @@ def score_review_category(review_id):
             "category_score": category_score
         }), 201
     except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+        current_app.logger.exception("code review score error: %s", e)
+        return jsonify({"error": "An internal error occurred."}), 400
 
 
 @main.route("/api/code-review/<review_id>/complete", methods=["POST"])
@@ -870,7 +874,8 @@ def complete_code_review(review_id):
             "review": completed
         }), 200
     except ValueError as e:
-        return jsonify({"error": str(e)}), 404
+        current_app.logger.exception("code review complete error: %s", e)
+        return jsonify({"error": "An internal error occurred."}), 404
 
 
 @main.route("/api/code-review/<review_id>/comments")
