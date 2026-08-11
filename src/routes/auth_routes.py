@@ -26,7 +26,12 @@ def authorize():
     session['github_token'] = token
     
     resp = github.get('user', token=token)
-    profile = resp.json()
+    if not resp.ok:
+        return redirect(url_for('main.index'))
+    try:
+        profile = resp.json()
+    except ValueError:
+        return redirect(url_for('main.index'))
     
     github_id = str(profile.get('id'))
     username = profile.get('login')
