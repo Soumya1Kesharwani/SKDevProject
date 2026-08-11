@@ -1,6 +1,7 @@
 import os
 import requests
 from flask import Blueprint, redirect, request, session, jsonify, url_for
+from config import Config
 
 github_bp = Blueprint("github", __name__)
 
@@ -16,7 +17,10 @@ def login():
     if not GITHUB_CLIENT_ID:
         return jsonify({"error": "GitHub OAuth is not configured on the server."}), 500
         
-    redirect_uri = request.host_url.rstrip('/') + url_for("github.callback")
+    # Build the callback URL from the configured base URL instead of the
+    # incoming Host header so an attacker cannot poison the redirect target
+    # (host-header poisoning) and steal the authorization code.
+    redirect_uri = Config.BASE_URL.rstrip('/') + url_for("github.callback")
     auth_url = (
         f"https://github.com/login/oauth/authorize"
         f"?client_id={GITHUB_CLIENT_ID}"
@@ -32,7 +36,7 @@ def callback():
     if not code:
         return redirect("/?github_auth=error")
 
-    redirect_uri = request.host_url.rstrip('/') + url_for("github.callback")
+    redirect_uri = Config.BASE_URL.rstrip('/') + url_for("github.callback")
     
     token_url = "https://github.com/login/oauth/access_token"
     payload = {
