@@ -662,6 +662,8 @@ def get_recommendations(
         for entry in skill_entries
     }
     all_projects = load_all_projects()
+    if tech_stack and tech_stack.lower() != "all":
+        all_projects = [p for p in all_projects if project_matches_tech(p, tech_stack)]
     # Load NLP model to determine if we should use semantic search
     model = get_nlp_model()
     
