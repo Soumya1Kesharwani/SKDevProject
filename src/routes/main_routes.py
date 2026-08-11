@@ -23,7 +23,7 @@ from utils.skill_progression import (
     SkillDifficulty,
     validate_skill_progression,
 )
-from utils.code_review import CodeReviewManager
+from utils.code_review import CodeReviewManager, SubmissionAlreadyExistsError
 from config import Config
 from utils.portfolio_analyzer import analyze_portfolio
 import math
@@ -706,6 +706,8 @@ def submit_code_for_review():
             "success": True,
             "submission": submission
         }), 201
+    except SubmissionAlreadyExistsError as e:
+        return jsonify({"error": str(e)}), 409
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
