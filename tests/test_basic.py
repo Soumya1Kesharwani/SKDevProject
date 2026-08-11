@@ -1098,6 +1098,17 @@ def test_sitemap_includes_compare():
     assert b"/compare" in response.data
 
 
+def test_sitemap_includes_static_pages():
+    """Sitemap should include /explore, /contact, and /profile pages."""
+    client = get_client()
+    response = client.get("/sitemap.xml")
+    assert response.status_code == 200
+    for path in ("/explore", "/contact", "/compare", "/profile"):
+        assert path.encode() in response.data, (
+            f"Sitemap missing public page {path}"
+        )
+
+
 
 # ============================================================
 # Run tests directly (no pytest required)

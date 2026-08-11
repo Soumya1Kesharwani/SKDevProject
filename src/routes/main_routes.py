@@ -493,12 +493,14 @@ def export_github(project_id):
 def sitemap():
     """
     Generate and return a sitemap.xml for search engine indexing.
-    Includes the homepage and all individual project detail pages.
+    Includes the homepage, static pages, and all individual project detail pages.
     """
     base = request.host_url.rstrip("/")
     projects = load_all_projects()
 
-    urls = [f"<url><loc>{base}/</loc></url>", f"<url><loc>{base}/compare</loc></url>"]
+    urls = [f"<url><loc>{base}/</loc></url>"]
+    for path in ("/explore", "/contact", "/compare", "/profile"):
+        urls.append(f"<url><loc>{base}{path}</loc></url>")
     for p in projects:
         urls.append(f"<url><loc>{base}/project/{p['id']}</loc></url>")
 
