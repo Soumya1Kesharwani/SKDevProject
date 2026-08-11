@@ -10,6 +10,10 @@ from enum import Enum
 from datetime import datetime, timezone
 
 
+class ReviewAlreadyCompletedError(Exception):
+    """Raised when a code review is completed more than once."""
+
+
 class ReviewStatus(Enum):
     """Status of a code review."""
     PENDING = "pending"
@@ -246,6 +250,9 @@ class CodeReviewManager:
             raise ValueError(f"Review {review_id} not found")
 
         review = self.reviews[review_id]
+        if review["completed_at"] is not None:
+            raise ReviewAlreadyCompletedError(f"Review {review_id} is already completed")
+
         scores = [s["score"] for s in review["category_scores"].values()]
         overall_score = sum(scores) / len(scores) if scores else 0
 
