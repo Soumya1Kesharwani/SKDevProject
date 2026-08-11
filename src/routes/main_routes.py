@@ -939,7 +939,9 @@ def create_path(path_id):
 
     Request headers:
         X-Learning-Path-Token  (required) - the secret token chosen by the
-                               client (should be a random UUID or similar).
+                               client. Must be at least 16 characters
+                               (a random UUID or similar high-entropy value).
+                               Tokens shorter than 16 characters are rejected.
 
     Request body (JSON):
         Any JSON object representing the initial learning-path state.
@@ -981,10 +983,11 @@ def read_path(path_id):
 
     Request headers:
         X-Learning-Path-Token  (required) - the token associated with this
-                               path when it was created.
+                               path when it was created. Must be at least
+                               16 characters long.
 
     Response 200:  {"path_id": "<path_id>", "data": { ... }}
-    Response 400:  token header missing or path_id format invalid.
+    Response 400:  token header missing or invalid, weak token, or path_id format invalid.
     Response 403:  token does not match the owner token.
     Response 404:  no learning path found for this path_id.
     """
@@ -1011,13 +1014,14 @@ def update_path(path_id):
 
     Request headers:
         X-Learning-Path-Token  (required) - the token associated with this
-                               path when it was created.
+                               path when it was created. Must be at least
+                               16 characters long.
 
     Request body (JSON):
         Any JSON object representing the new learning-path state.
 
     Response 200:  {"path_id": "<path_id>", "message": "Learning path updated."}
-    Response 400:  malformed request body, missing token, or invalid format.
+    Response 400:  malformed request body, missing or weak token, or invalid format.
     Response 403:  token does not match the owner token.
     Response 404:  no learning path found for this path_id.
     """
@@ -1154,6 +1158,8 @@ def get_path_analytics(path_id):
     Calculate time analytics and velocity for a specific learning path.
     
     Requires X-Learning-Path-Token header for authorization.
+    The token must be at least 16 characters long (a random UUID or
+    similar high-entropy value); weak tokens are rejected.
     Expected data structure in path['progress']:
     {
         "project_id": {"completed": bool, "actual_hours": float}
