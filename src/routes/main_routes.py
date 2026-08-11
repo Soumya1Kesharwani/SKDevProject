@@ -1174,6 +1174,8 @@ def get_path_analytics(path_id):
 
     # Analytics Calculation
     progress = path_data.get("progress", {})
+    if not isinstance(progress, dict):
+        progress = {}
     total_est = 0
     total_act = 0
     comp_est = 0
@@ -1194,7 +1196,7 @@ def get_path_analytics(path_id):
             if stats.get("completed"):
                 comp_est += est
                 comp_act += act
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, AttributeError):
             continue
 
     # Learning Velocity: ratio of Actual Time / Estimated Time
