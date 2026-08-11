@@ -632,6 +632,26 @@ def test_project_progress_unauthenticated_post():
     assert response.status_code == 401
     assert b"Unauthorized" in response.data
 
+def test_delete_project_cascades_progress():
+    """Deleting a project must remove its ProjectProgress rows."""
+    with app.app_context():
+        from models import db, User, ProjectProgress
+        if not db.session.get(User, 2):
+            db.session.add(User(id=2, github_id="456", username="adminuser", is_admin=True))
+        if not db.session.get(User, 1):
+            db.session.add(User(id=1, github_id="123", username="testuser"))
+        db.session.add(ProjectProgress(user_id=1, project_id=1, completed_steps=[True, True]))
+        db.session.commit()
+    client = get_client()
+    with client.session_transaction() as sess:
+        sess["user_id"] = 2
+    response = client.post("/admin/projects/1/delete")
+    assert response.status_code == 302
+    with app.app_context():
+        from models import Project, ProjectProgress
+        assert db.session.get(Project, 1) is None
+        assert ProjectProgress.query.filter_by(project_id=1).count() == 0
+
 
 def test_view_code_nested_path():
     """A project with a nested starter_code path should still return 200."""
