@@ -36,6 +36,11 @@ from models import db, ProjectProgress, UserGameProgress
 _skill_validator = SkillProgressionValidator()
 _code_review_manager = CodeReviewManager()
 
+
+def _authenticated_user_id():
+    """Return the logged-in user id, or None for anonymous requests."""
+    return session.get("user_id")
+
 # Interest categories that currently have no project recommendations available
 NO_PROJECT_INTERESTS = {
     "machine learning/ai",
@@ -551,18 +556,21 @@ def search_projects():
 @main.route("/api/skill-progression/validate", methods=["POST"])
 def validate_skill():
     """Validate if user can learn a skill at target difficulty level."""
+    user_id = _authenticated_user_id()
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     payload = request.get_json(silent=True)
 
     if not payload:
         return jsonify({"error": "Request body must be valid JSON."}), 400
 
-    user_id = (payload.get("user_id") or "").strip()
     skill_name = (payload.get("skill") or "").strip()
     target_difficulty = (payload.get("difficulty") or "").strip()
 
-    if not user_id or not skill_name or not target_difficulty:
+    if not skill_name or not target_difficulty:
         return jsonify({
-            "error": "user_id, skill, and difficulty are required"
+            "error": "skill and difficulty are required"
         }), 400
 
     result = validate_skill_progression(
@@ -578,19 +586,22 @@ def validate_skill():
 @main.route("/api/skill-progression/record", methods=["POST"])
 def record_skill_completion():
     """Record user completion of a skill at given difficulty level."""
+    user_id = _authenticated_user_id()
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     payload = request.get_json(silent=True)
 
     if not payload:
         return jsonify({"error": "Request body must be valid JSON."}), 400
 
-    user_id = (payload.get("user_id") or "").strip()
     skill_name = (payload.get("skill") or "").strip()
     difficulty = (payload.get("difficulty") or "").strip()
     assessment_score = payload.get("assessment_score")
 
-    if not user_id or not skill_name or not difficulty:
+    if not skill_name or not difficulty:
         return jsonify({
-            "error": "user_id, skill, and difficulty are required"
+            "error": "skill and difficulty are required"
         }), 400
 
     try:
@@ -629,10 +640,17 @@ def record_skill_completion():
 @main.route("/api/skill-progression/user/<user_id>")
 def get_user_progression(user_id):
     """Get skill progression data for a user."""
+    authenticated_user_id = _authenticated_user_id()
+    if not authenticated_user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     user_id = user_id.strip()
 
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
+
+    if str(authenticated_user_id) != user_id:
+        return jsonify({"error": "Forbidden"}), 403
 
     skills = _skill_validator.get_user_skills(user_id)
     proficiency = _skill_validator.calculate_overall_proficiency(user_id)
@@ -647,11 +665,18 @@ def get_user_progression(user_id):
 @main.route("/api/skill-progression/next/<user_id>/<skill>")
 def get_next_skill(user_id, skill):
     """Get recommended next skill level for user to pursue."""
+    authenticated_user_id = _authenticated_user_id()
+    if not authenticated_user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     user_id = user_id.strip()
     skill = skill.strip()
 
     if not user_id or not skill:
         return jsonify({"error": "user_id and skill are required"}), 400
+
+    if str(authenticated_user_id) != user_id:
+        return jsonify({"error": "Forbidden"}), 403
 
     next_skill = _skill_validator.get_recommended_next_skill(user_id, skill)
 
@@ -676,21 +701,28 @@ def get_next_skill(user_id, skill):
 @main.route("/api/code-review/submit", methods=["POST"])
 def submit_code_for_review():
     """Submit code for expert review."""
+    user_id = _authenticated_user_id()
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     payload = request.get_json(silent=True)
 
     if not payload:
         return jsonify({"error": "Request body must be valid JSON."}), 400
 
+    requested_user_id = (payload.get("user_id") or "").strip()
+    if requested_user_id and str(user_id) != requested_user_id:
+        return jsonify({"error": "Forbidden"}), 403
+
     submission_id = (payload.get("submission_id") or "").strip()
-    user_id = (payload.get("user_id") or "").strip()
     project_id = payload.get("project_id")
     code = (payload.get("code") or "").strip()
     language = (payload.get("language") or "").strip()
     description = (payload.get("description") or "").strip()
 
-    if not all([submission_id, user_id, project_id, code, language]):
+    if not all([submission_id, project_id, code, language]):
         return jsonify({
-            "error": "submission_id, user_id, project_id, code, and language are required"
+            "error": "submission_id, project_id, code, and language are required"
         }), 400
 
     try:
@@ -713,6 +745,9 @@ def submit_code_for_review():
 @main.route("/api/code-review/submission/<submission_id>")
 def get_submission(submission_id):
     """Get submission details."""
+    if not _authenticated_user_id():
+        return jsonify({"error": "Unauthorized"}), 401
+
     submission_id = submission_id.strip()
 
     submission = _code_review_manager.get_submission(submission_id)
@@ -728,7 +763,14 @@ def get_submission(submission_id):
 @main.route("/api/code-review/user/<user_id>/submissions")
 def get_user_code_submissions(user_id):
     """Get all code submissions from a user."""
+    authenticated_user_id = _authenticated_user_id()
+    if not authenticated_user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     user_id = user_id.strip()
+
+    if str(authenticated_user_id) != user_id:
+        return jsonify({"error": "Forbidden"}), 403
 
     submissions = _code_review_manager.get_user_submissions(user_id)
     return jsonify({
@@ -741,6 +783,9 @@ def get_user_code_submissions(user_id):
 @main.route("/api/code-review/project/<int:project_id>/submissions")
 def get_project_code_submissions(project_id):
     """Get all code submissions for a project."""
+    if not _authenticated_user_id():
+        return jsonify({"error": "Unauthorized"}), 401
+
     submissions = _code_review_manager.get_project_submissions(project_id)
     return jsonify({
         "project_id": project_id,
@@ -752,6 +797,9 @@ def get_project_code_submissions(project_id):
 @main.route("/api/code-review/start", methods=["POST"])
 def start_code_review():
     """Start a code review session."""
+    if not _authenticated_user_id():
+        return jsonify({"error": "Unauthorized"}), 401
+
     payload = request.get_json(silent=True)
 
     if not payload:
@@ -781,6 +829,9 @@ def start_code_review():
 @main.route("/api/code-review/<review_id>/comment", methods=["POST"])
 def add_review_comment(review_id):
     """Add feedback comment to a review."""
+    if not _authenticated_user_id():
+        return jsonify({"error": "Unauthorized"}), 401
+
     payload = request.get_json(silent=True)
 
     if not payload:
@@ -815,6 +866,9 @@ def add_review_comment(review_id):
 @main.route("/api/code-review/<review_id>/score", methods=["POST"])
 def score_review_category(review_id):
     """Score a code quality category in a review."""
+    if not _authenticated_user_id():
+        return jsonify({"error": "Unauthorized"}), 401
+
     payload = request.get_json(silent=True)
 
     if not payload:
@@ -848,6 +902,9 @@ def score_review_category(review_id):
 @main.route("/api/code-review/<review_id>/complete", methods=["POST"])
 def complete_code_review(review_id):
     """Complete a code review."""
+    if not _authenticated_user_id():
+        return jsonify({"error": "Unauthorized"}), 401
+
     payload = request.get_json(silent=True)
 
     if not payload:
@@ -876,6 +933,9 @@ def complete_code_review(review_id):
 @main.route("/api/code-review/<review_id>/comments")
 def get_review_feedback(review_id):
     """Get all feedback comments for a review."""
+    if not _authenticated_user_id():
+        return jsonify({"error": "Unauthorized"}), 401
+
     review_id = review_id.strip()
 
     comments = _code_review_manager.get_review_comments(review_id)
@@ -889,6 +949,9 @@ def get_review_feedback(review_id):
 @main.route("/api/code-review/submission/<submission_id>/quality")
 def get_code_quality_score(submission_id):
     """Get code quality score for a submission."""
+    if not _authenticated_user_id():
+        return jsonify({"error": "Unauthorized"}), 401
+
     submission_id = submission_id.strip()
 
     score_data = _code_review_manager.get_code_quality_score(submission_id)
@@ -898,6 +961,9 @@ def get_code_quality_score(submission_id):
 @main.route("/api/code-review/submission/<submission_id>/recommendations")
 def get_code_recommendations(submission_id):
     """Get improvement recommendations for a submission."""
+    if not _authenticated_user_id():
+        return jsonify({"error": "Unauthorized"}), 401
+
     submission_id = submission_id.strip()
 
     recommendations = _code_review_manager.get_improvement_recommendations(
