@@ -131,6 +131,7 @@ def explore():
 
     # Also pass filter dropdown options to UI
     available_levels = get_available_levels()
+    available_interests = get_available_interests()
     stats = get_project_stats()
     
     return render_template(
@@ -145,6 +146,7 @@ def explore():
         time=time_filter,
         sort=sort_by,
         available_levels=available_levels,
+        available_interests=available_interests,
         stats=stats,
         config=Config
     )
