@@ -890,11 +890,23 @@ def test_login_redirect():
     assert "github.com/login/oauth/authorize" in response.headers["Location"]
 
 def test_logout_redirect():
-    """Logout route should redirect to homepage."""
+    """Logout route should redirect to homepage and clear the session."""
     client = get_client()
-    response = client.get("/auth/logout")
+    with client.session_transaction() as sess:
+        sess["user_id"] = 1
+        sess["github_token"] = "test-token"
+    response = client.post("/auth/logout")
     assert response.status_code == 302
     assert response.headers["Location"] == "/"
+    with client.session_transaction() as sess:
+        assert "user_id" not in sess
+        assert "github_token" not in sess
+
+def test_logout_rejects_get():
+    """Logout must not be triggerable via a plain GET (logout CSRF)."""
+    client = get_client()
+    response = client.get("/auth/logout")
+    assert response.status_code == 405
 
 def test_profile_unauthenticated_redirects_to_login():
     """Profile route should redirect to login if unauthenticated."""
