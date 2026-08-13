@@ -755,8 +755,6 @@ def get_recommendations(
 
       match_details = item.get("match_details", {})
 
-      import random
-
       matched_skills_list = match_details.get("matched_skills", [])
       skills_str = ""
 
