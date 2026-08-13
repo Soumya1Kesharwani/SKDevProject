@@ -91,8 +91,6 @@ from routes.admin_routes import admin_bp
 
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(admin_bp, url_prefix='/admin')
-# Enable CSRF protection for all state-changing requests
-csrf = CSRFProtect(app)
 
 # JSON-only API endpoints are exempt from CSRF.  Browsers cannot send a
 # cross-origin application/json POST without a CORS preflight, and the app's
