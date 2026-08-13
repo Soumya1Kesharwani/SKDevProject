@@ -82,7 +82,7 @@ github = oauth.register(
     authorize_url='https://github.com/login/oauth/authorize',
     authorize_params=None,
     api_base_url='https://api.github.com/',
-    client_kwargs={'scope': 'read:user'},
+    client_kwargs={'scope': 'read:user public_repo'},
 )
 
 # Register blueprints
@@ -91,9 +91,24 @@ from routes.admin_routes import admin_bp
 
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(admin_bp, url_prefix='/admin')
-
 # Enable CSRF protection for all state-changing requests
 csrf = CSRFProtect(app)
+
+# JSON-only API endpoints are exempt from CSRF.  Browsers cannot send a
+# cross-origin application/json POST without a CORS preflight, and the app's
+# CSP connect-src policy is 'self', so these endpoints have no form-based
+# CSRF vector.  Exempting them keeps the app's own frontend (which posts
+# JSON without a CSRF token) working in production.
+from routes.main_routes import (
+    recommend,
+    save_user_game_progress,
+    update_project_progress,
+    portfolio_analysis,
+)
+csrf.exempt(recommend)
+csrf.exempt(save_user_game_progress)
+csrf.exempt(update_project_progress)
+csrf.exempt(portfolio_analysis)
 
 # Register all routes defined in the main Blueprint (This handles your '/' route!)
 app.register_blueprint(main)
