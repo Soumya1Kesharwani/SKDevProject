@@ -27,9 +27,10 @@ from utils.code_review import CodeReviewManager
 from config import Config
 from utils.portfolio_analyzer import analyze_portfolio
 from utils.pagination import parse_pagination
-import math
+import base64
 import os
 import math
+import requests
 from models import db, ProjectProgress, UserGameProgress
 
 _skill_validator = SkillProgressionValidator()
