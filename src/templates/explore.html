@@ -490,20 +490,9 @@
               <div class="select-wrap" style="width: 100%;">
                 <select id="interest" name="interest">
                   <option value="">Any Interest</option>
-                  <!-- We can hardcode standard interests or pass them -->
-                  <option value="web" {% if interest == "web" %}selected{% endif %}>Web Development</option>
-                  <option value="data" {% if interest == "data" %}selected{% endif %}>Data and Analytics</option>
-                  <option value="education" {% if interest == "education" %}selected{% endif %}>Education Tools</option>
-                  <option value="automation" {% if interest == "automation" %}selected{% endif %}>Automation</option>
-                  <option value="games" {% if interest == "games" %}selected{% endif %}>Games</option>
-                  <option value="cybersecurity" {% if interest == "cybersecurity" %}selected{% endif %}>CyberSecurity/Ethical Hacking</option>
-                  <option value="devops" {% if interest == "devops" %}selected{% endif %}>DevOps / Cloud Computing</option>
-                  <option value="backend" {% if interest == "backend" %}selected{% endif %}>Backend APIs</option>
-                  <option value="tools" {% if interest == "tools" %}selected{% endif %}>Developer Tools</option>
-                  <option value="productivity" {% if interest == "productivity" %}selected{% endif %}>Productivity</option>
-                  <option value="business logic" {% if interest == "business logic" %}selected{% endif %}>Business Logic</option>
-                  <option value="mobile" {% if interest == "mobile" %}selected{% endif %}>Mobile Development</option>
-                  <option value="machine learning/ai" {% if interest == "machine learning/ai" %}selected{% endif %}>Machine Learning/AI</option>
+                  {% for i in available_interests %}
+                  <option value="{{ i | lower }}" {% if interest == i | lower %}selected{% endif %}>{{ i }}</option>
+                  {% endfor %}
                 </select>
               </div>
             </div>

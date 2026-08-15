@@ -106,17 +106,6 @@ SKILL_SYNONYMS = {
     "k8s":           "kubernetes",
     "tf":            "tensorflow",
 }
-
-# Common aliases and abbreviations for skills
-# This improves recommendation accuracy by normalizing user input
-SKILL_ALIASES = {
-    "js": "javascript",
-    "py": "python",
-    "html5": "html",
-    "css3": "css",
-    "c++": "cpp",
-    "web dev": "javascript",
-}
 def _normalize_skill(s: str) -> str:
     """Normalize a skill string: strip surrounding whitespace and lowercase."""
     return s.strip().lower()
@@ -125,38 +114,12 @@ def _normalize_skill(s: str) -> str:
 # that reference SKILL_ALIASES continue to work without modification.
 SKILL_ALIASES = SKILL_SYNONYMS
 
-def parse_skills(skills_string):
-    """
-    Convert a raw skills string into a normalized, synonym-resolved lowercase list.
-    """
-    if not skills_string or not str(skills_string).strip():
-        return []
-
-    stripped = str(skills_string).strip()
-
-    if stripped.startswith("["):
-        try:
-            parsed = json.loads(stripped)
-            if isinstance(parsed, list):
-                tokens = [str(s).strip().lower() for s in parsed if str(s).strip()]
-                return [SKILL_SYNONYMS.get(token, token) for token in tokens]
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-    tokens = [
-        s.strip().lower()
-        for s in stripped.split(",")
-        if s.strip()
-    ]
-    return [SKILL_SYNONYMS.get(token, token) for token in tokens]
-
-
 def parse_skill_entries(skills_string):
     """Parse skills with optional per-skill proficiency levels."""
-    if not skills_string or not str(skills_string).strip():
+    if not skills_string or not skills_string.strip():
         return []
 
-    stripped = str(skills_string).strip()
+    stripped = skills_string.strip()
 
     if stripped.startswith("["):
         try:
@@ -174,10 +137,14 @@ def parse_skill_entries(skills_string):
                     if skill:
                         entries.append(
                             {
-                                "skill": SKILL_ALIASES.get(skill, skill),
+                                "skill": SKILL_SYNONYMS.get(skill, skill),
                                 "proficiency": (
                                     proficiency
-                                    if proficiency in ("Beginner", "Intermediate", "Advanced")
+                                    if proficiency in (
+                                        "Beginner",
+                                        "Intermediate",
+                                        "Advanced",
+                                    )
                                     else "Beginner"
                                 ),
                             }
@@ -188,12 +155,17 @@ def parse_skill_entries(skills_string):
 
     return [
         {
-            "skill": SKILL_ALIASES.get(_normalize_skill(skill), _normalize_skill(skill)),
+            "skill": SKILL_SYNONYMS.get(_normalize_skill(skill), _normalize_skill(skill)),
             "proficiency": "Beginner",
         }
-        for skill in stripped.split(",")
+        for skill in skills_string.split(",")
         if skill.strip()
     ]
+
+
+def parse_skills(skills_string):
+    return [entry["skill"] for entry in parse_skill_entries(skills_string)]
+
 
 _nlp_model = None
 _project_embeddings_cache = {}
@@ -530,11 +502,17 @@ def gap_boost(user_skills, project_skills, graph):
     return round(boost, 3)
 
 
-def get_progression(user_skills, recommended_ids, all_projects, graph):
+def get_progression(user_skills, recommended_ids, all_projects, graph, level, time_availability):
     """
     Return projects that are 1 hop away from user's current skills
-    but were NOT already recommended.
+    but were NOT already recommended, applying level and time filters.
     """
+    TIME_RANKS = ["low", "medium", "high"]
+    LEVEL_RANKS = ["beginner", "intermediate", "advanced"]
+    
+    user_time = time_availability.strip().lower()
+    user_level = level.strip().lower()
+
     # Find all 1-hop reachable skills
     reachable = set()
     for skill in user_skills:
@@ -544,6 +522,18 @@ def get_progression(user_skills, recommended_ids, all_projects, graph):
     progression = []
     for project in all_projects:
         if project["id"] in recommended_ids:
+            continue
+            
+        project_time = project.get("time", "").strip().lower()
+        if project_time not in TIME_RANKS or user_time not in TIME_RANKS:
+            continue
+        if TIME_RANKS.index(project_time) > TIME_RANKS.index(user_time):
+            continue
+            
+        project_level = project.get("level", "").strip().lower()
+        if project_level not in LEVEL_RANKS or user_level not in LEVEL_RANKS:
+            continue
+        if LEVEL_RANKS.index(project_level) > LEVEL_RANKS.index(user_level):
             continue
         project_skills = [
             SKILL_ALIASES.get(_normalize_skill(s), _normalize_skill(s))
@@ -672,7 +662,6 @@ def get_recommendations(
         for entry in skill_entries
     }
     all_projects = load_all_projects()
-    
     # Load NLP model to determine if we should use semantic search
     model = get_nlp_model()
     
@@ -682,7 +671,6 @@ def get_recommendations(
         user_tokens = _tokenize(_user_text(user_skills, level, interest, time_availability))
         idf_scores = _idf(project_documents + [user_tokens])
         user_vector = _tfidf_vector(user_tokens, idf_scores)
-    
     scored_projects = []
     graph = _load_skill_graph()
     for project in all_projects:
@@ -714,7 +702,6 @@ def get_recommendations(
                 user_vector,
                 idf_scores
             )
-
         final_score = rule_score + similarity_score
         
         # Check relevance: project must match at least one user skill,
@@ -735,7 +722,7 @@ def get_recommendations(
             })
     # Sort projects in descending order so the
     # most relevant recommendations appear first.
-    scored_projects.sort(key=lambda item: (item["score"], item["project"].get("id", 0)), reverse=True)
+    scored_projects.sort(key=lambda item: (-item["score"], int(item["project"].get("id", 0))))
     
     selected_projects = (
       scored_projects
@@ -767,8 +754,6 @@ def get_recommendations(
       proj["match_score"] = min(max(match_score, 4.0), 10.0)
 
       match_details = item.get("match_details", {})
-
-      import random
 
       matched_skills_list = match_details.get("matched_skills", [])
       skills_str = ""
@@ -825,7 +810,7 @@ def get_recommendations(
     cluster_data = _load_clusters()
     related = _get_related(top_ids, all_projects, cluster_data) if cluster_data else []
     
-    progression = get_progression(user_skills, top_ids, all_projects, graph) if graph else []
+    progression = get_progression(user_skills, top_ids, all_projects, graph, level, time_availability) if graph else []
     
     return {
         "recommendations": top_projects,
@@ -863,3 +848,46 @@ def validate_recommendation_inputs(skills, level, interest, time_availability):
         errors.append("Invalid time availability. Choose Low, Medium, or High.")
 
     return errors
+
+def diagnose_empty_state(skills_string, level, interest, time_availability):
+    """
+    Identifies the most likely cause of an empty result set and returns a
+    concrete suggestion for the user based on constraint relaxation.
+    """
+    user_skills = parse_skills(skills_string)
+    all_projects = load_all_projects()
+    
+    # 1. Unknown skills check: See if the user's skill exists in the DB at all
+    all_known_skills = set()
+    for p in all_projects:
+        for s in p.get("skills", []):
+            all_known_skills.add(SKILL_ALIASES.get(s.lower(), s.lower()))
+            
+    unmatched_skills = [s for s in user_skills if s not in all_known_skills]
+    if unmatched_skills:
+        skill_counts = Counter()
+        for p in all_projects:
+            for s in p.get("skills", []):
+                skill_counts[SKILL_ALIASES.get(s.lower(), s.lower())] += 1
+        top_skills = [s.title() for s, c in skill_counts.most_common(3)]
+        return f"No projects match '{', '.join(unmatched_skills)}'. Try popular skills like {', '.join(top_skills)}."
+        
+    # 2. Time constraint check: Relax time availability to see if matches appear
+    if time_availability.lower() != "high":
+        relaxed_time = get_recommendations(skills_string, level, interest, "high")
+        if relaxed_time and relaxed_time.get("recommendations"):
+            return "Your time availability is filtering out matches. Try selecting 'Medium' or 'High'."
+        
+    # 3. Level constraint check: See if skills match but level is too restrictive
+    any_skill_match = []
+    for p in all_projects:
+        p_skills = [SKILL_ALIASES.get(ps.lower(), ps.lower()) for ps in p.get("skills", [])]
+        if any(s in p_skills for s in user_skills):
+            any_skill_match.append(p)
+            
+    if any_skill_match:
+        levels = sorted({p.get("level") for p in any_skill_match if p.get("level")})
+        if levels and level.title() not in levels:
+            return f"We have projects for those skills, but not at the '{level}' level. Try {', '.join(levels)}."
+            
+    return "No projects matched your inputs. Try broadening your interest area or selecting different skills."
