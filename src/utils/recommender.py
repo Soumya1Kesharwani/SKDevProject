@@ -649,7 +649,7 @@ def get_recommendations(
     interest,
     time_availability,
     tech_stack="all",
-    max_results=None,
+    max_results=MAX_RESULTS,
 ):
     if isinstance(interest, str):
         interest = [interest]
