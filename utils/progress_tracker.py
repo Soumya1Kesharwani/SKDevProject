@@ -71,19 +71,29 @@ class ProgressTracker:
         """
         try:
             cursor = self.db.execute(
-                """SELECT MAX(date) as last_active
+                """SELECT DISTINCT date
                    FROM user_activity
-                   WHERE user_id = ?""",
+                   WHERE user_id = ?
+                   ORDER BY date DESC""",
                 (user_id,),
             )
-            result = cursor.fetchone()
-
-            if not result or not result[0]:
+            dates = [datetime.fromisoformat(row[0]).date() for row in cursor.fetchall()]
+            if not dates:
                 return 0
 
-            # For demo, return a simple streak counter
-            # In production, would track consecutive days
-            return 7  # Placeholder
+            today = datetime.now().date()
+            if dates[0] < today - timedelta(days=1):
+                return 0
+
+            streak = 1
+            expected = dates[0] - timedelta(days=1)
+            for activity_date in dates[1:]:
+                if activity_date == expected:
+                    streak += 1
+                    expected -= timedelta(days=1)
+                elif activity_date < expected:
+                    break
+            return streak
 
         except Exception:
             return 0
@@ -101,7 +111,7 @@ class ProgressTracker:
             cursor = self.db.execute(
                 """SELECT p.id, p.name,
                    COUNT(pt.id) as total,
-                   COUNT(CASE WHEN pt.completed = 1 THEN 1 END) as completed
+                   COUNT(CASE WHEN utp.completed = 1 THEN 1 END) as completed
                    FROM paths p
                    LEFT JOIN topics pt ON p.id = pt.path_id
                    LEFT JOIN user_topic_progress utp

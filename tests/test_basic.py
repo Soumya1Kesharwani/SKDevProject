@@ -26,6 +26,7 @@ from utils.roadmap_comparer import compare_roadmaps, load_all_career_roadmaps
 
 from app import app, internal_server_error
 from utils.roadmap_comparer import load_all_career_roadmaps, compare_roadmaps
+from utils.data_loader import clear_cache
 
 
 # ============================================================
@@ -33,9 +34,76 @@ from utils.roadmap_comparer import load_all_career_roadmaps, compare_roadmaps
 # ============================================================
 
 def setup_module():
+    """Clear the data cache before running the test suite to ensure clean state."""
+    import tempfile
+    import os
+    db_fd, db_path = tempfile.mkstemp()
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
     app.config["TESTING"] = True
     app.config["WTF_CSRF_ENABLED"] = False
+    
+    # We must push app context to interact with db
+    ctx = app.app_context()
+    ctx.push()
+    
+    from models import db, Project
+    db.drop_all()
+    db.create_all()
+    
+    # Load from JSON once to seed in-memory db
+    import json
+    data_file = os.path.join(os.path.dirname(__file__), "..", "data", "projects.json")
+    with open(data_file, "r", encoding="utf-8") as f:
+        projects_data = json.load(f)
+        for p_data in projects_data:
+            project = Project(
+                id=p_data.get("id"),
+                title=p_data.get("title", ""),
+                level=p_data.get("level", "Beginner"),
+                interest=p_data.get("interest", ""),
+                time=p_data.get("time", "Low"),
+                description=p_data.get("description", ""),
+                skills=p_data.get("skills", []),
+                features=p_data.get("features", []),
+                tech_stack=p_data.get("tech_stack", []),
+                roadmap=p_data.get("roadmap", []),
+                resources=p_data.get("resources", []),
+                starter_code=p_data.get("starter_code")
+            )
+            db.session.add(project)
+        db.session.commit()
     clear_cache()
+    
+    # We must push app context to interact with db
+    ctx = app.app_context()
+    ctx.push()
+    
+    from models import db, Project
+    db.drop_all()
+    db.create_all()
+    
+    # Load from JSON once to seed in-memory db
+    import json
+    data_file = os.path.join(os.path.dirname(__file__), "..", "data", "projects.json")
+    with open(data_file, "r", encoding="utf-8") as f:
+        projects_data = json.load(f)
+        for p_data in projects_data:
+            project = Project(
+                id=p_data.get("id"),
+                title=p_data.get("title", ""),
+                level=p_data.get("level", "Beginner"),
+                interest=p_data.get("interest", ""),
+                time=p_data.get("time", "Low"),
+                description=p_data.get("description", ""),
+                skills=p_data.get("skills", []),
+                features=p_data.get("features", []),
+                tech_stack=p_data.get("tech_stack", []),
+                roadmap=p_data.get("roadmap", []),
+                resources=p_data.get("resources", []),
+                starter_code=p_data.get("starter_code")
+            )
+            db.session.add(project)
+        db.session.commit()
 
 
 # ============================================================
@@ -153,7 +221,7 @@ def test_score_coverage_ratio_exact_values():
     # 1 of 2 skills matched: coverage = 0.5, score = 1 * 3 * 0.5 = 1.5
     score_result = score_single_project(project, ["python"], "Advanced", "Games", "High")[0]
     score = score_result[0] if isinstance(score_result, tuple) else score_result
-    assert score == pytest.approx(2.5), f"Expected 1.5 but got {score}"
+    assert score == pytest.approx(2.5), f"Expected 2.5 but got {score}"
 
     # 2 of 2 skills matched: coverage = 1.0, score = 2 * 3 * 1.0 = 6.0. Python + Flask has 1.5x synergy multiplier: 6.0 * 1.5 = 9.0
     score_result = score_single_project(project, ["python", "flask"], "Advanced", "Games", "High")
@@ -227,13 +295,13 @@ def test_score_single_project_alias_matching():
 def test_get_recommendations_returns_results():
     """Python + Beginner + Data + Low should always return at least one result."""
     results = get_recommendations("Python", "Beginner", "Data", "Low")
-    assert len(results) > 0, "Expected at least one recommendation"
+    assert len(results.get("recommendations", [])) > 0, "Expected at least one recommendation"
 
 
 def test_get_recommendations_max_three():
     """The engine must never return more than three results."""
     results = get_recommendations("Python, JavaScript, HTML", "Beginner", "Web", "Low")
-    assert len(results) <= 3, f"Expected at most 3 results, got {len(results)}"
+    assert len(results.get("recommendations", [])) <= 3, f"Expected at most 3 results, got {len(results.get('recommendations', []))}"
 
 
 def test_get_recommendations_result_format():
@@ -564,6 +632,26 @@ def test_project_progress_unauthenticated_post():
     assert response.status_code == 401
     assert b"Unauthorized" in response.data
 
+def test_delete_project_cascades_progress():
+    """Deleting a project must remove its ProjectProgress rows."""
+    with app.app_context():
+        from models import db, User, ProjectProgress
+        if not db.session.get(User, 2):
+            db.session.add(User(id=2, github_id="456", username="adminuser", is_admin=True))
+        if not db.session.get(User, 1):
+            db.session.add(User(id=1, github_id="123", username="testuser"))
+        db.session.add(ProjectProgress(user_id=1, project_id=1, completed_steps=[True, True]))
+        db.session.commit()
+    client = get_client()
+    with client.session_transaction() as sess:
+        sess["user_id"] = 2
+    response = client.post("/admin/projects/1/delete")
+    assert response.status_code == 302
+    with app.app_context():
+        from models import Project, ProjectProgress
+        assert db.session.get(Project, 1) is None
+        assert ProjectProgress.query.filter_by(project_id=1).count() == 0
+
 
 def test_view_code_nested_path():
     """A project with a nested starter_code path should still return 200."""
@@ -626,7 +714,6 @@ def test_search_api_returns_results():
     assert isinstance(data, list)
 
 def test_search_api_empty_query():
-    """Search API should return an empty list for blank queries."""
     client = get_client()
     response = client.get("/api/search?q=")
     assert response.status_code == 200
@@ -638,7 +725,6 @@ def test_search_api_no_match():
     client = get_client()
     response = client.get("/api/search?q=nonexistentqueryxyz")
     assert response.status_code == 200
-
     data = response.get_json()
     assert isinstance(data, list)
     assert len(data) == 0
@@ -824,11 +910,23 @@ def test_login_redirect():
     assert "github.com/login/oauth/authorize" in response.headers["Location"]
 
 def test_logout_redirect():
-    """Logout route should redirect to homepage."""
+    """Logout route should redirect to homepage and clear the session."""
     client = get_client()
-    response = client.get("/auth/logout")
+    with client.session_transaction() as sess:
+        sess["user_id"] = 1
+        sess["github_token"] = "test-token"
+    response = client.post("/auth/logout")
     assert response.status_code == 302
     assert response.headers["Location"] == "/"
+    with client.session_transaction() as sess:
+        assert "user_id" not in sess
+        assert "github_token" not in sess
+
+def test_logout_rejects_get():
+    """Logout must not be triggerable via a plain GET (logout CSRF)."""
+    client = get_client()
+    response = client.get("/auth/logout")
+    assert response.status_code == 405
 
 def test_profile_unauthenticated_redirects_to_login():
     """Profile route should redirect to login if unauthenticated."""
@@ -932,6 +1030,95 @@ def test_admin_crud():
         
         with app.app_context():
             assert db.session.get(Project, project_id) is None
+
+
+# ============================================================
+# GitHub Export tests
+# ============================================================
+
+def test_export_github_unauthenticated():
+    """Unauthenticated users should be redirected to login when trying to export."""
+    client = get_client()
+    response = client.post("/project/1/export_github")
+    assert response.status_code == 302
+    assert "/auth/login" in response.headers["Location"]
+
+def test_export_github_missing_starter_code():
+    """Exporting a project without starter code should redirect back to the project."""
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['github_token'] = {'access_token': 'dummy_token'}
+            
+        # Assuming project 2 does not have starter code or we make a fake one
+        with app.app_context():
+            from models import db, Project
+            p = Project(id=999, title="No Code", level="Beg", interest="Web", time="Low", description="Desc")
+            db.session.add(p)
+            db.session.commit()
+            
+        response = client.post("/project/999/export_github")
+        assert response.status_code == 302
+        assert "/project/999" in response.headers["Location"]
+
+
+from unittest.mock import patch
+
+@patch("routes.main_routes.requests.get")
+@patch("routes.main_routes.requests.post")
+@patch("routes.main_routes.requests.put")
+def test_export_github_api_failures(mock_put, mock_post, mock_get):
+    """Test how the app handles different GitHub API failure status codes."""
+    # First, we need a project that actually has a starter code file to pass the file check
+    with app.app_context():
+        from models import db, Project
+        p = db.session.get(Project, 1000)
+        if not p:
+            p = Project(
+                id=1000, title="Valid Code", level="Beg", interest="Web", time="Low", 
+                description="Desc", starter_code="expense_tracker.py"
+            )
+            db.session.add(p)
+            db.session.commit()
+
+    # Test 401 Unauthorized
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['github_token'] = {'access_token': 'dummy_token'}
+            
+        mock_get.return_value.status_code = 401
+        response = client.post("/project/1000/export_github")
+        
+        assert response.status_code == 302
+        assert "/auth/login" in response.headers["Location"]
+        
+    # Test 403 Rate Limit on repo creation
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['github_token'] = {'access_token': 'dummy_token'}
+            
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {"login": "testuser"}
+        mock_post.return_value.status_code = 403
+        
+        response = client.post("/project/1000/export_github")
+        
+        assert response.status_code == 302
+        assert "/project/1000" in response.headers["Location"]
+
+    # Test 422 Conflict (repo exists) but file push succeeds
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['github_token'] = {'access_token': 'dummy_token'}
+            
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {"login": "testuser"}
+        mock_post.return_value.status_code = 422
+        mock_put.return_value.status_code = 201
+        
+        response = client.post("/project/1000/export_github")
+        
+        assert response.status_code == 302
+        assert "github.com/testuser/DevPath-Starter-valid-code" in response.headers["Location"]
 
 
 
