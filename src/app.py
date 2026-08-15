@@ -36,11 +36,22 @@ app.secret_key = os.getenv("SECRET_KEY", "default-dev-secret-key-replace-in-prod
 # Load config settings into Flask's internal config manager properly
 app.config.from_object(Config)
 
+# Initialize CSRF protection before registering route exemptions below.
+csrf = CSRFProtect(app)
+
 # Initialize SQLAlchemy
 db.init_app(app)
 
 with app.app_context():
     db.create_all()
+    try:
+        from sqlalchemy import text
+        with db.engine.connect() as conn:
+            conn.execute(text("ALTER TABLE projects ADD COLUMN estimated_hours FLOAT DEFAULT 0.0"))
+            conn.commit()
+    except Exception:
+        pass
+
     # Auto-seed project database if empty (required for ephemeral/Vercel serverless runs)
     from models import Project
     try:
@@ -63,7 +74,8 @@ with app.app_context():
                         tech_stack=p_data.get("tech_stack", []),
                         roadmap=p_data.get("roadmap", []),
                         resources=p_data.get("resources", []),
-                        starter_code=p_data.get("starter_code")
+                        starter_code=p_data.get("starter_code"),
+                        estimated_hours=p_data.get("estimated_hours", 0.0)
                     )
                     db.session.add(project)
                 db.session.commit()

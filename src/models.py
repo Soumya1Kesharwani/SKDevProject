@@ -35,6 +35,7 @@ class Project(db.Model):
     roadmap = db.Column(db.JSON, nullable=False, default=list)
     resources = db.Column(db.JSON, nullable=True, default=list)
     starter_code = db.Column(db.String(500), nullable=True)
+    estimated_hours = db.Column(db.Float, nullable=True, default=0.0)
 
     progress = db.relationship('ProjectProgress', cascade="all, delete-orphan", back_populates='project')
 
@@ -46,6 +47,7 @@ class Project(db.Model):
             "level": self.level,
             "interest": self.interest,
             "time": self.time,
+            "estimated_hours": self.estimated_hours if self.estimated_hours is not None else 0.0,
             "description": self.description,
             "skills": self.skills if self.skills else [],
             "features": self.features if self.features else [],
