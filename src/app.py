@@ -36,6 +36,9 @@ app.secret_key = os.getenv("SECRET_KEY", "default-dev-secret-key-replace-in-prod
 # Load config settings into Flask's internal config manager properly
 app.config.from_object(Config)
 
+# Initialize CSRF protection before registering route exemptions below.
+csrf = CSRFProtect(app)
+
 # Initialize SQLAlchemy
 db.init_app(app)
 
