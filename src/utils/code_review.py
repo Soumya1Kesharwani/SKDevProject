@@ -110,6 +110,11 @@ class CodeReviewManager:
             "metrics": {},
         }
 
+        if submission_id in self.submissions:
+            raise SubmissionAlreadyExistsError(
+                f"Submission {submission_id} already exists"
+            )
+
         self.submissions[submission_id] = submission
         return submission
 
@@ -323,9 +328,7 @@ class CodeReviewManager:
             "overall_score": submission["metrics"].get("overall_score"),
             "categories": {
                 cat: score.get("score", 0)
-                for cat, score in submission["metrics"]
-                .get("category_scores", {})
-                .items()
+                for cat, score in submission["metrics"].get("category_scores", {}).items()
             },
             "status": "reviewed",
         }

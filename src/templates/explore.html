@@ -411,10 +411,10 @@
         <input type="search" id="topic-search-mobile" autocomplete="off" aria-label="Search projects"
           placeholder="Search projects…" />
       </form>
-      <a href="#home" class="nav-mobile-link" role="menuitem">Home</a>
-      <a href="#how-it-works" class="nav-mobile-link" role="menuitem">How It Works</a>
-      <a href="#features" class="nav-mobile-link" role="menuitem">Features</a>
-      <a href="#find-project" class="nav-mobile-link" role="menuitem">Find Project</a>
+      <a href="/#home" class="nav-mobile-link" role="menuitem">Home</a>
+      <a href="/#how-it-works" class="nav-mobile-link" role="menuitem">How It Works</a>
+      <a href="/#features" class="nav-mobile-link" role="menuitem">Features</a>
+      <a href="/#find-project" class="nav-mobile-link" role="menuitem">Find Project</a>
       <a href="/explore" class="nav-mobile-link" role="menuitem">Explore All</a>
       <a href="/compare" class="nav-mobile-link" role="menuitem">Compare</a>
       <a href="/contact" class="nav-mobile-link" role="menuitem">Contact</a>
@@ -490,20 +490,9 @@
               <div class="select-wrap" style="width: 100%;">
                 <select id="interest" name="interest">
                   <option value="">Any Interest</option>
-                  <!-- We can hardcode standard interests or pass them -->
-                  <option value="web" {% if interest == "web" %}selected{% endif %}>Web Development</option>
-                  <option value="data" {% if interest == "data" %}selected{% endif %}>Data and Analytics</option>
-                  <option value="education" {% if interest == "education" %}selected{% endif %}>Education Tools</option>
-                  <option value="automation" {% if interest == "automation" %}selected{% endif %}>Automation</option>
-                  <option value="games" {% if interest == "games" %}selected{% endif %}>Games</option>
-                  <option value="cybersecurity" {% if interest == "cybersecurity" %}selected{% endif %}>CyberSecurity/Ethical Hacking</option>
-                  <option value="devops" {% if interest == "devops" %}selected{% endif %}>DevOps / Cloud Computing</option>
-                  <option value="backend" {% if interest == "backend" %}selected{% endif %}>Backend APIs</option>
-                  <option value="tools" {% if interest == "tools" %}selected{% endif %}>Developer Tools</option>
-                  <option value="productivity" {% if interest == "productivity" %}selected{% endif %}>Productivity</option>
-                  <option value="business logic" {% if interest == "business logic" %}selected{% endif %}>Business Logic</option>
-                  <option value="mobile" {% if interest == "mobile" %}selected{% endif %}>Mobile Development</option>
-                  <option value="machine learning/ai" {% if interest == "machine learning/ai" %}selected{% endif %}>Machine Learning/AI</option>
+                  {% for i in available_interests %}
+                  <option value="{{ i | lower }}" {% if interest == i | lower %}selected{% endif %}>{{ i }}</option>
+                  {% endfor %}
                 </select>
               </div>
             </div>
@@ -604,12 +593,11 @@
       <div class="footer-col">
         <h4 class="footer-col-title">Quick Links</h4>
         <ul class="footer-links-list">
-          <li><a href="#home">Home</a></li>
-          <li><a href="#how-it-works">How It Works</a></li>
-          <li><a href="#features">Features</a></li>
+          <li><a href="/#home">Home</a></li>
+          <li><a href="/#how-it-works">How It Works</a></li>
+          <li><a href="/#features">Features</a></li>
           <li><a href="/explore">Explore All</a></li>
-          <li><a href="#the-project">Find Project</a></li>
-          <li><a href="#find-project">Find Project</a></li>
+          <li><a href="/#find-project">Find Project</a></li>
           <li><a href="/contact">Contact Us</a></li>
         </ul>
       </div>
@@ -627,7 +615,7 @@
       <div class="footer-col">
         <h4 class="footer-col-title">About Us</h4>
         <ul class="footer-links-list">
-          <li><a href="#our-story">Our Story</a></li>
+          <li><a href="/#our-story">Our Story</a></li>
           <li><a href="https://github.com/komalharshita/DevPath" target="_blank" rel="noopener noreferrer">Open Source</a></li>
           <li><a href="https://github.com/komalharshita/DevPath/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License</a></li>
         </ul>
@@ -637,7 +625,7 @@
     <div class="footer-bottom">
       <p>DevPath is open source. Licensed under the MIT License.</p>
       <div class="footer-bottom-links">
-        <a href="#our-story">About Us</a>
+        <a href="/#our-story">About Us</a>
         <a href="https://github.com/komalharshita/DevPath/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Project License</a>
       </div>
     </div>
