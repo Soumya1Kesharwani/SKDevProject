@@ -638,6 +638,59 @@ class TestWeakTokenRejection:
 
 
 # ---------------------------------------------------------------------------
+# 3. Analytics route — malformed stored progress must not 500
+# ---------------------------------------------------------------------------
+
+class TestPathAnalyticsRoute:
+
+    def setup_method(self):
+        _clear_all()
+
+    def test_analytics_malformed_stats_value_returns_200(self):
+        client = get_client()
+        token = make_token()
+        client.post(
+            "/api/learning-path/analytics-malformed-stats",
+            json={"progress": {"999": "not-a-dict"}},
+            headers={TOKEN_HEADER: token},
+        )
+        response = client.get(
+            "/api/learning-path/analytics-malformed-stats/analytics",
+            headers={TOKEN_HEADER: token},
+        )
+        assert response.status_code == 200
+
+    def test_analytics_progress_not_a_dict_returns_200(self):
+        client = get_client()
+        token = make_token()
+        client.post(
+            "/api/learning-path/analytics-list-progress",
+            json={"progress": ["a", "b"]},
+            headers={TOKEN_HEADER: token},
+        )
+        response = client.get(
+            "/api/learning-path/analytics-list-progress/analytics",
+            headers={TOKEN_HEADER: token},
+        )
+        assert response.status_code == 200
+
+    def test_analytics_valid_progress_returns_200(self):
+        client = get_client()
+        token = make_token()
+        client.post(
+            "/api/learning-path/analytics-valid",
+            json={"progress": {"1": {"completed": True, "actual_hours": 5}}},
+            headers={TOKEN_HEADER: token},
+        )
+        response = client.get(
+            "/api/learning-path/analytics-valid/analytics",
+            headers={TOKEN_HEADER: token},
+        )
+        assert response.status_code == 200
+        assert response.get_json()["path_id"] == "analytics-valid"
+
+
+# ---------------------------------------------------------------------------
 # Run tests directly (no pytest required)
 # ---------------------------------------------------------------------------
 
@@ -651,7 +704,7 @@ if __name__ == "__main__":
         TestCreatePathRoute,
         TestReadPathRoute,
         TestUpdatePathRoute,
-        TestWeakTokenRejection,
+        TestPathAnalyticsRoute,
     ]
 
     passed = 0
