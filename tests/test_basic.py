@@ -494,6 +494,20 @@ def test_security_headers_present():
         == "geolocation=(), microphone=(), camera=()"
     )
 
+def test_csp_allows_github_avatars():
+    """img-src must whitelist GitHub avatar hosts so profile avatars load (issue #1875)."""
+    client = get_client()
+    response = client.get("/")
+
+    csp = response.headers["Content-Security-Policy"]
+    img_src = next(
+        part.strip()
+        for part in csp.split(";")
+        if part.strip().startswith("img-src ")
+    )
+    assert "https://avatars.githubusercontent.com" in img_src
+    assert "https://*.githubusercontent.com" in img_src
+
 def test_recommend_api_single_interest():
     client = get_client()
     response = client.post("/api/recommend", json={
