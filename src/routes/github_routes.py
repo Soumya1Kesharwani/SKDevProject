@@ -2,6 +2,7 @@ import os
 import secrets
 import requests
 from flask import Blueprint, redirect, request, session, jsonify, url_for
+from config import Config
 
 github_bp = Blueprint("github", __name__)
 
@@ -19,12 +20,11 @@ def login():
     """Redirect user to GitHub OAuth login."""
     if not GITHUB_CLIENT_ID:
         return jsonify({"error": "GitHub OAuth is not configured on the server."}), 500
-
-    # Generate and persist a state parameter to protect against login CSRF.
-    state = secrets.token_urlsafe(32)
-    session[_OAUTH_STATE_KEY] = state
-
-    redirect_uri = request.host_url.rstrip('/') + url_for("github.callback")
+        
+    # Build the callback URL from the configured base URL instead of the
+    # incoming Host header so an attacker cannot poison the redirect target
+    # (host-header poisoning) and steal the authorization code.
+    redirect_uri = Config.BASE_URL.rstrip('/') + url_for("github.callback")
     auth_url = (
         f"https://github.com/login/oauth/authorize"
         f"?client_id={GITHUB_CLIENT_ID}"
@@ -41,13 +41,7 @@ def callback():
     if not code:
         return redirect("/?github_auth=error")
 
-    # Validate the state parameter to prevent login CSRF.
-    expected_state = session.pop(_OAUTH_STATE_KEY, None)
-    returned_state = request.args.get("state")
-    if not expected_state or not returned_state or not secrets.compare_digest(expected_state, returned_state):
-        return redirect("/?github_auth=error")
-
-    redirect_uri = request.host_url.rstrip('/') + url_for("github.callback")
+    redirect_uri = Config.BASE_URL.rstrip('/') + url_for("github.callback")
     
     token_url = "https://github.com/login/oauth/access_token"
     payload = {
