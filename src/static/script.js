@@ -809,6 +809,17 @@ async function updatePortfolioAnalysis() {
     var footer = document.createElement("div");
     footer.className = "project-card-footer";
 
+    var link = document.createElement("a");
+    link.className = "btn-details";
+    link.textContent = "View Full Project";
+    link.href = "/project/" + project.id;
+
+    link.addEventListener("click", function() {
+      if (typeof RecentlyViewed !== "undefined") {
+        RecentlyViewed.trackView(project);
+      }
+    });
+
     if (typeof DevPathBookmarks !== "undefined") {
       var saveBtn = document.createElement("button");
       saveBtn.type = "button";
@@ -834,19 +845,8 @@ async function updatePortfolioAnalysis() {
 
       // Also keep recently-viewed tracking code
       footer.appendChild(saveBtn);
-      footer.appendChild(link);
     }
 
-    var link = document.createElement("a");
-    link.className = "btn-details";
-    link.textContent = "View Full Project";
-    link.href = "/project/" + project.id;
-    
-    link.addEventListener("click", function() {
-      if (typeof RecentlyViewed !== "undefined") {
-        RecentlyViewed.trackView(project);
-      }
-    });
     footer.appendChild(link);
 
     card.appendChild(title);
