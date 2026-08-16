@@ -578,6 +578,65 @@ class TestUpdatePathRoute:
         assert response.status_code == 400
 
 
+class TestWeakTokenRejection:
+    """Issue #1874: trivially weak client-chosen tokens must be rejected."""
+
+    def setup_method(self):
+        _clear_all()
+
+    def test_post_weak_token_returns_400(self):
+        """Creating a path with a short token must be rejected with 400."""
+        client = get_client()
+        response = client.post(
+            "/api/learning-path/weak-create",
+            json={"step": 1},
+            headers={TOKEN_HEADER: "test"},
+        )
+        assert response.status_code == 400
+        assert "error" in response.get_json()
+
+    def test_post_numeric_weak_token_returns_400(self):
+        """Creating a path with a 4-character numeric token must be rejected."""
+        client = get_client()
+        response = client.post(
+            "/api/learning-path/weak-num",
+            json={"step": 1},
+            headers={TOKEN_HEADER: "1234"},
+        )
+        assert response.status_code == 400
+
+    def test_get_weak_token_returns_400(self):
+        """Reading with a weak token must be rejected with 400."""
+        token = make_token()
+        self._seed("weak-read", token, {"step": 1})
+        client = get_client()
+        response = client.get(
+            "/api/learning-path/weak-read",
+            headers={TOKEN_HEADER: "abc"},
+        )
+        assert response.status_code == 400
+
+    def test_put_weak_token_returns_400(self):
+        """Updating with a weak token must be rejected with 400."""
+        token = make_token()
+        self._seed("weak-upd", token, {"step": 1})
+        client = get_client()
+        response = client.put(
+            "/api/learning-path/weak-upd",
+            json={"step": 2},
+            headers={TOKEN_HEADER: "short"},
+        )
+        assert response.status_code == 400
+
+    def _seed(self, path_id, token, data):
+        client = get_client()
+        client.post(
+            f"/api/learning-path/{path_id}",
+            json=data,
+            headers={TOKEN_HEADER: token},
+        )
+
+
 # ---------------------------------------------------------------------------
 # 3. Analytics route — malformed stored progress must not 500
 # ---------------------------------------------------------------------------
