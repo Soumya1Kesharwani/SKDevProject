@@ -322,6 +322,16 @@ function projectIsCompleted(projectId) {
   });
 }
 
+function renderLeaderboardList(listEl, entries) {
+  if (!entries.length) {
+    listEl.innerHTML = '<li class="leaderboard-empty">Complete projects to see rankings</li>';
+    return;
+  }
+  listEl.innerHTML = entries.map(function (entry, index) {
+    return "<li><span>" + (index + 1) + ". " + entry.name + "</span><strong>" + entry.points + " pts</strong></li>";
+  }).join("");
+}
+
 function updateProfileWidgets() {
   var pointsEl = document.getElementById("progress-points");
   var statsEl = document.getElementById("progress-stats");
@@ -370,15 +380,17 @@ function updateProfileWidgets() {
       : "<li class=\"achievement-empty\">No achievements yet. Use DevPath and unlock the first badge.</li>";
   }
   if (leaderboardList) {
-    var entries = [
-      { name: "Ava", points: 245 },
-      { name: "Kai", points: 192 },
-      { name: "Sam", points: 176 },
-      { name: "You", points: progress.points }
-    ].sort(function (a, b) { return b.points - a.points; });
-    leaderboardList.innerHTML = entries.map(function (entry, index) {
-      return "<li><span>" + (index + 1) + ". " + entry.name + "</span><strong>" + entry.points + " pts</strong></li>";
-    }).join("");
+    fetch("/api/leaderboard")
+      .then(function (r) {
+        if (!r.ok) throw new Error("Leaderboard unavailable");
+        return r.json();
+      })
+      .then(function (data) {
+        renderLeaderboardList(leaderboardList, data.leaderboard || []);
+      })
+      .catch(function () {
+        renderLeaderboardList(leaderboardList, [{ name: "You", points: progress.points }]);
+      });
   }
   if (historyList) {
     historyList.innerHTML = progress.completedProjects.length

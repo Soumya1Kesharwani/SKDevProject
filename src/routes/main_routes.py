@@ -1205,6 +1205,28 @@ def save_user_game_progress():
     db.session.commit()
     return jsonify({"message": "Progress saved successfully"}), 200
 
+
+@main.route("/api/leaderboard", methods=["GET"])
+def leaderboard():
+    """Return the top users ranked by gamified progress points."""
+    if not session.get("user_id"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    entries = []
+    for record in UserGameProgress.query.all():
+        points = record.data.get("points", 0) if isinstance(record.data, dict) else 0
+        try:
+            points = int(points)
+        except (TypeError, ValueError):
+            points = 0
+        name = record.user.username if record.user else f"user-{record.user_id}"
+        entries.append({"name": name, "points": points})
+
+    entries.sort(key=lambda e: e["points"], reverse=True)
+
+    return jsonify({"leaderboard": entries[:10]}), 200
+
+
 @main.route("/api/portfolio-analysis", methods=["POST"])
 def portfolio_analysis():
     """
