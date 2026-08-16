@@ -10,6 +10,10 @@ from enum import Enum
 from datetime import datetime, timezone
 
 
+class SubmissionAlreadyExistsError(Exception):
+    """Raised when a code submission re-uses an existing submission_id."""
+
+
 class ReviewStatus(Enum):
     """Status of a code review."""
     PENDING = "pending"
@@ -105,6 +109,11 @@ class CodeReviewManager:
             "review_count": 0,
             "metrics": {},
         }
+
+        if submission_id in self.submissions:
+            raise SubmissionAlreadyExistsError(
+                f"Submission {submission_id} already exists"
+            )
 
         self.submissions[submission_id] = submission
         return submission
