@@ -1145,6 +1145,35 @@ def test_sitemap_includes_compare():
     assert b"/compare" in response.data
 
 
+def test_code_review_errors_do_not_leak_exception_details():
+    """Code-review API errors must return a generic message, not raw str(e)."""
+    client = get_client()
+    generic = "An internal error occurred."
+
+    response = client.post("/api/code-review/submit", json={
+        "submission_id": "s1", "user_id": "u1", "project_id": "not-an-int",
+        "code": "x = 1", "language": "python",
+    })
+    assert response.status_code == 400
+    assert response.get_json()["error"] == generic
+
+    for status, path, payload in (
+        (404, "/api/code-review/start",
+         {"submission_id": "no-such-submission", "reviewer_id": "r1"}),
+        (404, "/api/code-review/no-such-review/comment",
+         {"line_number": 1, "code_snippet": "x", "feedback": "f"}),
+        (400, "/api/code-review/no-such-review/score",
+         {"category": "functionality", "score": 80}),
+        (404, "/api/code-review/no-such-review/complete",
+         {"summary": "done"}),
+    ):
+        response = client.post(path, json=payload)
+        assert response.status_code == status, path
+        error = response.get_json()["error"]
+        assert error == generic, f"{path} leaked: {error}"
+        assert "no-such" not in error, f"{path} leaked exception internals"
+
+
 
 # ============================================================
 # Run tests directly (no pytest required)
