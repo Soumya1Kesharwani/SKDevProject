@@ -1,4 +1,5 @@
 import os
+import secrets
 import requests
 from flask import Blueprint, redirect, request, session, jsonify, url_for
 from config import Config
@@ -7,6 +8,9 @@ github_bp = Blueprint("github", __name__)
 
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
+
+# Session key used to store the OAuth state between login and callback.
+_OAUTH_STATE_KEY = "github_oauth_state"
 
 # You can configure your local callback URL in GitHub, e.g., http://localhost:5000/api/github/callback
 # In production, it will be your domain.
@@ -26,6 +30,7 @@ def login():
         f"?client_id={GITHUB_CLIENT_ID}"
         f"&redirect_uri={redirect_uri}"
         f"&scope=public_repo"
+        f"&state={state}"
     )
     return redirect(auth_url)
 
@@ -48,7 +53,12 @@ def callback():
     headers = {"Accept": "application/json"}
 
     response = requests.post(token_url, json=payload, headers=headers)
-    data = response.json()
+    if response.status_code != 200:
+        return redirect("/?github_auth=error")
+    try:
+        data = response.json()
+    except ValueError:
+        return redirect("/?github_auth=error")
 
     access_token = data.get("access_token")
     if access_token:
