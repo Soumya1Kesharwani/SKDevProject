@@ -52,7 +52,9 @@ def authorize():
     session['user_id'] = user.id
     return redirect(url_for('main.profile'))
 
-@auth_bp.route('/logout')
+@auth_bp.route('/logout', methods=['POST'])
 def logout():
-    session.pop('user_id', None)
+    # Clear the entire session so the GitHub OAuth access token
+    # (session['github_token']) is not left behind for the next browser user.
+    session.clear()
     return redirect(url_for('main.index'))
