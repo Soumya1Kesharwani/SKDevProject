@@ -28,8 +28,6 @@ from config import Config
 from utils.portfolio_analyzer import analyze_portfolio
 from utils.pagination import parse_pagination
 import base64
-import os
-import math
 import requests
 from models import db, ProjectProgress, UserGameProgress
 
