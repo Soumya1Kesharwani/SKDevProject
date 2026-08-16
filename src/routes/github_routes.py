@@ -59,7 +59,12 @@ def callback():
     headers = {"Accept": "application/json"}
 
     response = requests.post(token_url, json=payload, headers=headers)
-    data = response.json()
+    if response.status_code != 200:
+        return redirect("/?github_auth=error")
+    try:
+        data = response.json()
+    except ValueError:
+        return redirect("/?github_auth=error")
 
     access_token = data.get("access_token")
     if access_token:
