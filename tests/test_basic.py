@@ -304,6 +304,21 @@ def test_get_recommendations_max_three():
     assert len(results.get("recommendations", [])) <= 3, f"Expected at most 3 results, got {len(results.get('recommendations', []))}"
 
 
+def test_get_recommendations_default_cap_applies():
+    """MAX_RESULTS must be honored as the default cap when max_results is None."""
+    capped = get_recommendations("python", "Beginner", "Web", "Low")
+    assert len(capped.get("recommendations", [])) <= 3, (
+        f"Expected default cap of 3, got {len(capped.get('recommendations', []))}"
+    )
+
+    uncapped = get_recommendations(
+        "python", "Beginner", "Web", "Low", max_results=100
+    )
+    assert len(uncapped.get("recommendations", [])) > 3, (
+        "Explicit max_results should override the default cap"
+    )
+
+
 def test_get_recommendations_result_format():
     """Each returned project must be a dict with at least a title and id."""
     results = get_recommendations("Python", "Beginner", "Data", "Low")
