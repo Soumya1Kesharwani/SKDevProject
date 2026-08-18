@@ -1567,3 +1567,76 @@ function renderPortfolioAnalysis(result) {
       '</div>' +
     '</div>';
 }
+
+/* ============================================================
+   Share Project & Toast Notification Handler
+   ============================================================ */
+(function initShareFeature() {
+  function showShareToast(message) {
+    var toast = document.getElementById("share-toast");
+    if (!toast) return;
+    var msgEl = document.getElementById("share-toast-msg");
+    if (msgEl && message) msgEl.textContent = message;
+
+    toast.style.display = "flex";
+    void toast.offsetWidth;
+    toast.classList.add("show");
+
+    if (toast._hideTimeout) clearTimeout(toast._hideTimeout);
+    toast._hideTimeout = setTimeout(function () {
+      toast.classList.remove("show");
+      setTimeout(function () {
+        toast.style.display = "none";
+      }, 300);
+    }, 3000);
+  }
+
+  function copyToClipboard(text, successMessage) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () {
+        showShareToast(successMessage || "Link copied to clipboard!");
+      }).catch(function () {
+        fallbackCopyText(text, successMessage);
+      });
+    } else {
+      fallbackCopyText(text, successMessage);
+    }
+  }
+
+  function fallbackCopyText(text, successMessage) {
+    var textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand("copy");
+      showShareToast(successMessage || "Link copied to clipboard!");
+    } catch (err) {
+      showShareToast("Failed to copy link");
+    }
+    document.body.removeChild(textArea);
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var shareProjectBtn = document.getElementById("btn-share-project");
+    if (shareProjectBtn) {
+      shareProjectBtn.addEventListener("click", function () {
+        var title = this.getAttribute("data-project-title") || document.title;
+        var url = window.location.href;
+        copyToClipboard(url, "📋 Direct project link copied to clipboard!");
+      });
+    }
+
+    var shareResultBtn = document.getElementById("share-result-btn");
+    if (shareResultBtn) {
+      shareResultBtn.addEventListener("click", function () {
+        var url = window.location.href;
+        copyToClipboard("Check out my DevPath project recommendations: " + url, "Results link copied to clipboard!");
+      });
+    }
+  });
+})();
