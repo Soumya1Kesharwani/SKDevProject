@@ -446,9 +446,69 @@
     var PROJECT_TIME = {{ project.time | tojson }};
     var PROJECT_SKILLS = {{ project.skills | tojson }};
     var USER_LOGGED_IN = {{ 'true' if session.get('user_id') else 'false' }};
+
+    function copyProjectLink(btn) {
+      var url = window.location.href;
+      
+      if (btn) {
+        var textSpan = btn.querySelector('.btn-share-text') || btn;
+        var originalText = textSpan.innerText || textSpan.textContent;
+        btn.classList.add('copied');
+        textSpan.textContent = '✓ Link Copied!';
+        
+        setTimeout(function() {
+          btn.classList.remove('copied');
+          textSpan.textContent = originalText;
+        }, 2500);
+      }
+
+      function showToast(msg) {
+        var toast = document.getElementById("share-toast");
+        var toastMsg = document.getElementById("share-toast-msg");
+        if (toastMsg) toastMsg.textContent = msg;
+        if (toast) {
+          toast.style.display = "flex";
+          toast.style.opacity = "1";
+          toast.classList.add("show");
+          setTimeout(function() {
+            toast.classList.remove("show");
+            toast.style.opacity = "0";
+            setTimeout(function() { toast.style.display = "none"; }, 300);
+          }, 3000);
+        }
+      }
+
+      function fallbackCopy(text) {
+        var textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand("copy");
+          showToast("📋 Direct project link copied to clipboard!");
+        } catch (err) {
+          showToast("📋 Link: " + text);
+        }
+        document.body.removeChild(textArea);
+      }
+
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(url).then(function() {
+          showToast("📋 Direct project link copied to clipboard!");
+        }).catch(function() {
+          fallbackCopy(url);
+        });
+      } else {
+        fallbackCopy(url);
+      }
+    }
   </script>
   <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
-  <script src="/static/script.js"></script>
+  <script src="/static/script.js?v=share_v3"></script>
   <script src="/static/bookmarks.js"></script>
 </body>
 
