@@ -6150,6 +6150,7 @@ body.dark-theme .theme-toggle:hover {
 }
 
 .share-toast.show {
+  display: flex !important;
   transform: translateY(0);
   opacity: 1;
   pointer-events: auto;
@@ -6157,5 +6158,12 @@ body.dark-theme .theme-toggle:hover {
 
 .share-toast svg {
   flex-shrink: 0;
+}
+
+.btn-share-project.copied {
+  background-color: #10b981 !important;
+  color: #ffffff !important;
+  border-color: #10b981 !important;
+  transition: all 0.2s ease;
 }
 
