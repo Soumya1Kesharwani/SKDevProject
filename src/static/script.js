@@ -1627,12 +1627,29 @@ function fallbackCopyText(text, successMessage) {
   document.body.removeChild(textArea);
 }
 
+window.copyProjectLink = function (btn) {
+  var url = window.location.href;
+  
+  if (btn) {
+    var textSpan = btn.querySelector(".btn-share-text") || btn;
+    var originalText = textSpan.textContent;
+    btn.classList.add("copied");
+    textSpan.textContent = "✓ Link Copied!";
+    
+    setTimeout(function () {
+      btn.classList.remove("copied");
+      textSpan.textContent = originalText;
+    }, 2500);
+  }
+
+  window.copyToClipboard(url, "📋 Direct project link copied to clipboard!");
+};
+
 document.addEventListener("click", function (e) {
   var shareBtn = e.target.closest("#btn-share-project, .btn-share-project");
   if (shareBtn) {
     e.preventDefault();
-    var url = window.location.href;
-    window.copyToClipboard(url, "📋 Direct project link copied to clipboard!");
+    window.copyProjectLink(shareBtn);
     return;
   }
 
